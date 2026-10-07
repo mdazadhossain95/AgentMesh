@@ -98,6 +98,8 @@ class Task(_Serializable):
     retry_count: int = 0
     parent_task: str | None = None
     reuse_worktree_of: str | None = None
+    context_tasks: list[str] = field(default_factory=list)  # earlier tasks whose summaries are given as input
+    base_tasks: list[str] = field(default_factory=list)   # start from these tasks' branches (stacked work)
     isolation: str = "worktree"          # worktree | inplace
     delegation_depth: int = 1
     timeout_seconds: int = 1800

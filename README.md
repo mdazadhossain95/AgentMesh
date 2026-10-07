@@ -31,10 +31,11 @@ AgentMesh normalizes the error and re-runs the *same role, same prompt, same wor
 
 This is an MVP. What is actually verified, as of the last run on the author's machine (macOS, Python 3.14):
 
-* **Verified by automated tests (160, no network, no paid calls):** discovery, registry, config, project/Flutter detection,
+* **Verified by automated tests (219, no network, no paid calls):** discovery, registry, config, project/Flutter detection,
   Agent Pack generation, role selection, workflow planning, routing strategies, fallback, error normalization,
   worktree isolation + integration, init idempotency, CLAUDE.md preservation, generic adapter against real subprocesses,
   CLI end to end with mock workers.
+* **Verified live on real Claude Code:** the enforcement hooks (see below).
 * **Verified against the real CLIs on that machine (free `--version` / `--help` only):** that each adapter's required
   flags exist in the installed CLI's own help.
 * **NOT verified: any live model call.** No prompt was ever sent to a real CLI during development (cost, and
@@ -49,12 +50,14 @@ This is an MVP. What is actually verified, as of the last run on the author's ma
 | Codex `codex` | 0.160.0 | `exec --cd --sandbox workspace-write --output-last-message` | follow-ups use a fresh prompt (no `resume`) |
 | Antigravity `agy` | 1.3.0 | `--print <prompt> --mode accept-edits --print-timeout` | prompt-as-value form is *inferred* from help; smoke-test it |
 | Qwen Code `qwen` | 0.21.8 | `--prompt` | help shows no approval flag: headless edit approval depends on your Qwen settings; add one via `workers.extra_args.qwen` |
-| Gemini CLI `gemini` | 0.47.0 | `--prompt --approval-mode auto_edit` | extra, found on PATH |
 | OpenCode `opencode` | 1.18.16 | `run --dir` | extra; no edit-only approval flag (`autonomy: full` adds `--auto`) |
 | Command Code `command-code` | 1.65.0 | `--print --permission-mode accept-edits` | version never probed: its `--version` **self-updates the CLI** |
+| Cline `cline` | 3.0.69 | `--cwd --timeout [--yolo]`, prompt positional | headless auto-approves all tools and has no edit-only mode, so cline is **refused unless `autonomy: full` is set explicitly** (falls back to other workers otherwise). Original install was broken (native binary SIGKILLed); `npm i -g cline` fixed it |
+| Kiro `kiro-cli` | 2.24.1 | `chat --no-interactive --trust-tools=fs_read,fs_write` | `autonomy: full` → `--trust-all-tools`; output stays text |
+| GitHub Copilot `copilot` | 1.0.88 | `--prompt=… --silent --no-ask-user`; edit: `--allow-tool=write --deny-tool=shell`; full: `--allow-all-tools` | help calls `--allow-all-tools` required for non-interactive mode, so edit mode may be refused until smoke-tested |
 | Freebuff `freebuff` | 0.0.186 | — | **INTERACTIVE_ONLY**: no non-interactive mode in `--help`; cannot be a worker |
-| Kilo `kilo` | not installed | placeholder | **CONFIGURATION_REQUIRED**: define its invocation in `agents.yaml` |
-| anything else | cline, copilot, kiro-cli seen | — | reported as "adapter required"; register via `agents.yaml` |
+| Kilo `kilo` | 7.8.8 | OpenCode fork: `run --dir [--auto] [-m model]`; 10 of 12 `:free` models answered a live coding prompt | installed via `npm i -g @kilocode/cli`; ids ending `:free` are rate-limited upstream at times (classified RATE_LIMITED, next model is tried) |
+| anything else | copilot seen | — | reported as "adapter required"; register via `agents.yaml` |
 
 Auth state is always `UNKNOWN` (probing it costs a call). Remaining quota is never shown because none of these CLIs expose it.
 
@@ -100,6 +103,12 @@ diff, runs `agentmesh verify`, sends focused corrections with `delegate --contin
 | `doctor [--json]` | Config, roles, workflow, workers, routing depth, git, hygiene. No model calls |
 | `plan "<request>" [--json]` | Map a request to workflow stages/roles (+ worker preview) |
 | `delegate --role R ...` | Run one role as a task on a routed worker, in a git worktree, with fallback |
+| `delegate --base-task T1 [--base-task T2]` | Build on earlier tasks' work (stacked) or test/review several together |
+| `audit [--json]` | List direct product-code changes in the main tree (works for any manager CLI) |
+| `abandon TASK` | Drop a task so it no longer blocks finishing |
+| `hook pre-edit\|stop\|session-start` | Claude Code hook entry points (installed by init) |
+| `run-batch FILE [--max-parallel N] [--fail-fast]` | Run a task graph: independent tasks in parallel |
+| `plan "..." --emit-batch FILE` | Also write the batch file for the plan |
 | `delegate --continue TASK --message "fix only X"` | Focused correction in the same worktree (max rounds from workflow) |
 | `status [--json]` | Workers + tasks |
 | `diff TASK [--stat]` | The task's real git diff |
@@ -158,6 +167,37 @@ selected as stale instead of deleting them. Put per-project tweaks under `overri
 | the managed block in `CLAUDE.md` / `AGENTS.md` | `.agentmesh-worktrees/` |
 | `tasks/`, `reports/` if you want an audit trail | anything secret (none is ever written) |
 
+## Making the manager follow the loop
+
+Instructions alone can be ignored, so `init` also installs enforcement:
+
+* **Claude Code (real hooks, written to `.claude/settings.json`, merged with your own settings):**
+  * `PreToolUse` on Edit/Write/MultiEdit/NotebookEdit: the manager is **blocked from editing product code** and told which
+    `agentmesh delegate --role …` to use. Docs, `*.md`, `.agentmesh/`, `.claude/` stay editable (`enforcement.allow_paths`).
+  * `Stop`: it cannot finish while recent tasks are SUCCESS-but-unverified, still running, or out of scope (verify, integrate,
+    continue, or `agentmesh abandon`). It pushes back once, never in a loop.
+  * `SessionStart`: injects status (roles, ready workers, unfinished tasks).
+  * Workers are never affected (they carry `AGENTMESH_DEPTH ≥ 1`), and every hook **fails open** on internal errors.
+  * Verified live: a Claude Code session was refused `lib/hello.dart` yet wrote `NOTES.md`, and was refused a plain "done"
+    while a task was unverified.
+* **Any other manager CLI:** no hook mechanism of theirs was verified, so they get the instructions plus
+  `agentmesh audit` (lists uncommitted product-code changes made outside task branches; exit 1 if any).
+* **Tuning:** `enforcement.mode` = `block` (default) | `warn` (allow + log to `.agentmesh/logs/enforcement.log`) | `off`;
+  env `AGENTMESH_ENFORCE=off` for one session. Limits: the hook sees edit tools, not shell edits (`sed -i`, redirects); `audit` catches those afterwards.
+  The hook command is `agentmesh hook …`, so `agentmesh` must be on PATH or the hook silently does nothing.
+
+## Benchmark: which model is actually best
+
+`agentmesh benchmark --yes` (**live, spends quota/credits**) gives every ready CLI, and every model in the model lists
+(`--wide`: every model the CLIs report), the same 4 small coding tasks in a fresh temp dir (slugify, LRU cache, interval-merge
+bug fix, duration parser with edge cases). Hidden unit tests the worker never sees score the result; the harness itself is
+tested (reference solutions must score 100%, stubs <100%). Results merge into `~/.agentmesh/benchmark.json`.
+`init` then orders `workers.models.*` and `routing.quality_order` from these measurements (falling back to the static lists),
+and `--apply` writes them into an existing project. Limits: 4 easy tasks mostly tie at 100% (speed breaks ties); it measures
+reliability and speed, not hard-problem skill; scores are for one account on one day. Re-run when models or quotas change.
+Last run (2026-10-07): 19 of 30 candidates scored 100% (all Kiro models except minimax-m2.5, claude, copilot, codex, cline,
+7 Kilo free models); antigravity 38%; qwen (login), command-code and Kilo inkling-small (quota) unusable.
+
 ## Workflow
 
 `workflow.yaml` is data: stages, the role each runs, and the signals that switch them on. `agentmesh plan` evaluates it.
@@ -184,9 +224,29 @@ If the area can't be inferred and several engineers exist, `plan` says `needs_cl
   `WORKER_FAILED`/unknown failures do **not** fall back: the work itself failed, so the manager decides.
   Classification looks at stderr and the tail of stdout only on failure, so a successful reply that merely mentions "quota"
   is never mistaken for one.
+* **Limits (free and paid):** AgentMesh cannot read remaining quota (no CLI exposes it), so it reacts to the real limit message.
+  If the provider prints a reset time ("try again in 2 hours", `Retry-After: 120`), that exact time becomes the cooldown for the
+  worker (or just the model: `kilo::…`, tracked per model); otherwise `fallback.cooldown_seconds` applies. Work moves to the
+  next model/worker immediately, and the limited one comes back by itself when its timer ends. `agentmesh status` lists what is
+  cooling down and for how long. Order free models/workers first in `workers.models.*` / `routing.free_workers`.
+* **Parallel runs:** `agentmesh run-batch FILE [--max-parallel N] [--fail-fast]` runs a dependency graph: tasks with no unfinished
+  dependency run at the same time (default 3, `parallel.max_workers`), the rest wait. Code-writing dependencies become the
+  stacked base of the next task; read-only ones (spec, analysis) are passed as written context. A failed dependency skips its
+  dependents but not unrelated work. `plan "<request>" --emit-batch b.json` writes the graph for you (spec → contract →
+  implementers in parallel → tests → reviews). Reviewers are steered away from the CLI that wrote the code. Safe to launch several
+  `delegate` processes yourself too: task ids are reserved atomically, state files and git operations are locked.
+* **Stacked work:** `delegate --base-task T1 [--base-task T2]` starts a task from the finished branches of earlier tasks (merged
+  together if several), so the app role sees the backend's code and the tester/reviewer sees everything at once. Only SUCCESS tasks
+  can be a base; overlapping bases fail cleanly with `GIT_CONFLICT`; the task's reported changes are still only its own;
+  `integrate` of a stacked task marks the contained base tasks INTEGRATED.
 * **Isolation:** every write-role task gets branch `agentmesh/<task>` in `.agentmesh-worktrees/<task>/`. Read-only roles run
   in place, or inside another task's worktree via `--reuse-worktree` (test, review). Changed files come from git; the
   worker's own list is kept as `reported_files` for comparison. Out-of-scope changes → `SCOPE_VIOLATION`, no checkpoint commit.
+* **Model chains:** `workers.models.<worker>` may be a ranked list. On timeout/quota/rate-limit the worker tries its next model
+  (each limited to `workers.model_timeout_seconds`, default 300) and remembers bad models for a cooldown, and only after the
+  list is exhausted does fallback move to another CLI. `init` seeds `workers.models.opencode` and `workers.models.kilo` (free `:free` models) and `workers.models.kiro` (cheapest credit multipliers first) with the models your
+  `opencode models` actually lists from a short ranked list (Nvidia Nemotron-3-super first, measured fastest on 2026-10-07;
+  that ranking is responsiveness on one key, not a quality benchmark). Edit the list freely; it is human-owned.
 * **Depth:** `AGENTMESH_DEPTH` is passed to workers; `delegation.max_depth` (default 1) blocks recursive delegation.
 * **Autonomy:** `workers.autonomy: edit` (default; each CLI's edit-only/accept-edits mode where it has one) or `full`
   (the CLI's permission-bypass flag; `doctor` warns). Override per role with `workers.role_autonomy`. In `edit` mode a CLI
@@ -227,6 +287,7 @@ class MyAdapter(AgentAdapter):
   (bearer/basic tokens, cookies, `*_KEY/SECRET/TOKEN/PASSWORD=`, `sk-…`, `ghp_…`, `AKIA…`, JWTs, private-key blocks). Redaction is
   pattern-based: treat logs as sensitive anyway.
 * Role policies forbid `.env*`, key/cert files, `secrets/`, `.git/`, `.agentmesh/` for workers; violations are flagged from git.
+* `benchmark` is LIVE and spends quota. opencode/kilo/cline run with approve-everything (they have no edit-only mode) inside an empty temp dir; that is not a sandbox. Hidden tests run model-written code with a minimal environment (no inherited secrets).
 * `autonomy: full` removes the CLI's own guardrails. The worktree protects your branch, not your machine.
 * Workers run as you. The worktree separates changes; it is not a sandbox.
 * Nothing is pushed anywhere. `integrate` merges locally, only verified branches (or `--force`).
@@ -247,7 +308,7 @@ class MyAdapter(AgentAdapter):
 
 ## Known limitations
 
-* Sequential execution. Worktrees and task records are parallel-safe by design (one dir/branch per task) but the runner is not concurrent yet.
+* Parallelism is thread-based inside `run-batch` and lock-based across processes; there is no cap per individual CLI beyond the router's balancing, so many parallel tasks can hit one provider's rate limit (they then fall back as usual).
 * Task classification is keyword-based (editable in `workflow.yaml`), not semantic. The manager can override with `--signal`.
 * Only Claude's JSON and Codex's last-message output are parsed; others are text tails.
 * No cost/quota awareness beyond what a real failure tells us.

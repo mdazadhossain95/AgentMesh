@@ -41,10 +41,12 @@ def test_interactive_only_cli(tmp_path):
     assert a.state == "INTERACTIVE_ONLY" and a.headless == "NO" and not a.ready
 
 
-def test_kilo_requires_configuration(tmp_path):
-    make_script(tmp_path / "bin", "kilo", 'echo kilo 1.0')
+def test_kilo_is_ready_only_when_run_help_documents_dir(tmp_path):
+    make_script(tmp_path / "bin", "kilo", 'case "$1" in --version) echo 7.8.8;; run) echo "  --dir  directory"; echo "  --model";; *) echo "  --help";; esac')
     a = run(tmp_path).by_name()["kilo"]
-    assert a.installed and a.state == "CONFIGURATION_REQUIRED"
+    assert a.installed and a.state == "READY" and a.version == "7.8.8"
+    make_script(tmp_path / "bin", "kilo", 'echo "  --help"')
+    assert run(tmp_path).by_name()["kilo"].state == "UNVERIFIED"
 
 
 def test_command_code_version_is_never_executed(tmp_path):

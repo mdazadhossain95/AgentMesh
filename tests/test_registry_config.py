@@ -7,7 +7,7 @@ from agentmesh.registry import build_registry
 
 def test_builtin_adapters_and_aliases():
     reg = build_registry(custom={}, mock_env=False)
-    assert {"claude", "codex", "antigravity", "qwen", "kilo", "freebuff", "gemini", "opencode", "command-code"} <= set(reg.names())
+    assert {"claude", "codex", "antigravity", "qwen", "kilo", "freebuff", "opencode", "command-code"} <= set(reg.names())
     assert reg.get("agy").name == "antigravity" and reg.get("cmd").name == "command-code"
     with pytest.raises(AgentMeshError):
         reg.get("nope")

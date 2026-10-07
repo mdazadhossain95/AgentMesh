@@ -13,8 +13,8 @@ from .models import AgentInfo, utcnow
 from .registry import Registry
 
 # CLIs we know exist in the wild but ship no adapter. Reported as "adapter required".
-CANDIDATE_NAMES = ("aider", "goose", "crush", "cursor-agent", "amp", "droid", "cline", "kiro", "kiro-cli",
-                   "auggie", "copilot", "plandex", "codebuff", "forge", "warp-agent", "jules")
+CANDIDATE_NAMES = ("aider", "goose", "crush", "cursor-agent", "amp", "droid",
+                   "auggie", "plandex", "codebuff", "forge", "warp-agent", "jules")
 _HEURISTIC = re.compile(r"^[a-z0-9]+-(code|coder)$")
 
 

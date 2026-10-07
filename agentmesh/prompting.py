@@ -36,7 +36,8 @@ def _bullets(items: list[str]) -> str:
 
 
 def build_prompt(task: Task, role_markdown: str, project_name: str, *, follow_up: str | None = None,
-                 prior: WorkerResult | None = None, fallback_note: str | None = None) -> str:
+                 prior: WorkerResult | None = None, fallback_note: str | None = None,
+                 inputs: list[WorkerResult] | None = None) -> str:
     parts = [
         f"You are executing role `{task.role}` for project `{project_name}`, launched by AgentMesh.\n"
         f"Your working directory is the isolated workspace. Work only inside it.",
@@ -55,6 +56,13 @@ def build_prompt(task: Task, role_markdown: str, project_name: str, *, follow_up
         + ("- This role is READ-ONLY: do not modify any file.\n" if task.capability == "read-only" else "")
         + "- If you cannot run a command (permission denied), say so in the report instead of guessing results.",
     ]
+    if inputs:
+        parts.append("## Inputs from earlier stages (reports by other roles; treat as context, verify against the code)\n" + "\n\n".join(
+            f"### {r.task_id} ({r.role}, {r.status})\n{r.summary[-1200:]}\nChanged: {', '.join(r.changed_files[:20]) or '(none)'}"
+            for r in inputs))
+    if task.base_tasks:
+        parts.append("## Starting point\nYour workspace already contains the finished work of: " + ", ".join(task.base_tasks)
+                     + ". Build on it; do not redo or rewrite it.")
     if prior is not None and follow_up:
         parts.append(
             "## Follow-up on previous attempt\n"

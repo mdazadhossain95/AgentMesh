@@ -4,7 +4,7 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from pathlib import Path
 
-from . import bootstrap, gitutil
+from . import bootstrap, enforcement, gitutil
 from .config import ProjectConfig, load_yaml
 from .discovery import DiscoveryReport
 from .errors import AgentMeshError
@@ -108,6 +108,10 @@ def run_doctor(root: Path | None, registry: Registry, report: DiscoveryReport) -
             p = cfg.paths.root / f
             ok = p.is_file() and bootstrap.BEGIN in p.read_text(encoding="utf-8")
             sec.add(f, "READY" if ok else "WARN", "" if ok else "AgentMesh section missing")
+        if cfg.get("enforcement.mode") != "off" and cfg.get("enforcement.claude_hooks", True):
+            ok = enforcement.claude_hooks_installed(cfg.paths.root)
+            sec.add("claude hooks", "READY" if ok else "WARN",
+                    f"enforcement={cfg.get('enforcement.mode')}" if ok else "not installed in .claude/settings.json (re-run init)")
         gi = cfg.paths.root / ".gitignore"
         ok = gi.is_file() and ".agentmesh/runtime/" in gi.read_text(encoding="utf-8")
         sec.add(".gitignore", "READY" if ok else "WARN", "" if ok else "runtime/worktree ignore block missing")

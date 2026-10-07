@@ -5,7 +5,7 @@ import pytest
 
 from conftest import make_script
 from agentmesh.adapters import (AntigravityAdapter, ClaudeAdapter, CodexAdapter, CommandCodeAdapter, FreebuffAdapter,
-                                GeminiAdapter, GenericAdapter, KiloAdapter, OpenCodeAdapter, QwenAdapter)
+                                GenericAdapter, ClineAdapter, KiroAdapter, CopilotAdapter, KiloAdapter, OpenCodeAdapter, QwenAdapter)
 from agentmesh.adapters.base import RawResult, RunContext, parse_flags
 from agentmesh.errors import ErrorCode, UnsupportedError, classify_text
 from agentmesh.models import AgentInfo, Task
@@ -98,8 +98,11 @@ def test_other_adapters_build(tmp_path):
     cases = [
         (AntigravityAdapter(), info("--print", "--mode", "--print-timeout"), ["--mode", "accept-edits", "--print-timeout", "1800s", "--print", "PROMPT"]),
         (QwenAdapter(), info("--prompt"), ["--prompt", "PROMPT"]),
-        (GeminiAdapter(), info("--prompt", "--approval-mode"), ["--approval-mode", "auto_edit", "--prompt", "PROMPT"]),
         (CommandCodeAdapter(), info("--print", "--permission-mode"), ["--permission-mode", "accept-edits", "--print", "PROMPT"]),
+                (KiroAdapter(), info("--no-interactive", "--trust-tools", "--trust-all-tools"),
+         ["chat", "--no-interactive", "--trust-tools=fs_read,fs_write", "PROMPT"]),
+        (CopilotAdapter(), info("--prompt", "--allow-tool", "--deny-tool", "--no-ask-user", "--silent"),
+         ["--allow-tool=write", "--deny-tool=shell", "--no-ask-user", "--silent", "--prompt=PROMPT"]),
         (OpenCodeAdapter(), info("--dir"), ["run", "--dir", str(tmp_path), "PROMPT"]),
     ]
     for ad, inf, tail in cases:
@@ -211,3 +214,11 @@ def test_redaction():
     for leak in ("abcdefghijklmnop", "sk-live", "ghp_a", "sid=abc123", "MIIE"):
         assert leak not in r
     assert "normal text" in r
+
+
+def test_cline_fails_closed_unless_full_autonomy(tmp_path):
+    flags = info("--cwd", "--timeout", "--yolo")
+    with pytest.raises(UnsupportedError):
+        ClineAdapter().build_command(ctx(tmp_path), flags)
+    argv = ClineAdapter().build_command(ctx(tmp_path, autonomy="full"), flags).argv
+    assert argv[1:] == ["--cwd", str(tmp_path), "--timeout", "1800", "--yolo", "--", "PROMPT"]

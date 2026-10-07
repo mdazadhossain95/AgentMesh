@@ -8,7 +8,7 @@ from typing import Callable
 from . import gitutil, scope
 from .adapters.base import RunContext
 from .config import ProjectConfig
-from .errors import AgentMeshError, ErrorCode, INFRA_ERRORS, UnsupportedError
+from .errors import AgentMeshError, ErrorCode, INFRA_ERRORS, UnsupportedError, parse_retry_seconds
 from .models import Attempt, AgentInfo, Task, TaskStatus, WorkerResult, utcnow
 from .prompting import build_prompt, parse_report, read_role
 from .registry import Registry
@@ -59,6 +59,12 @@ class Runner:
             return Path(owner.worktree), owner.task_id, False
         if task.worktree and Path(task.worktree).is_dir():           # continuation
             return Path(task.worktree), task.task_id, True
+        if task.base_tasks:
+            branches = self._base_branches(task)
+            path, branch, base = self.worktrees.create(task.task_id, branches[0] if branches else "HEAD",
+                                                       tuple(branches[1:]))
+            task.worktree, task.branch, task.base_commit = str(path), branch, base
+            return path, task.task_id, True
         if task.isolation == "worktree" and self.config.get("worktree.enabled", True):
             path, branch, base = self.worktrees.create(task.task_id)
             task.worktree, task.branch, task.base_commit = str(path), branch, base
@@ -66,6 +72,27 @@ class Runner:
         if gitutil.repo_root(self.root) and gitutil.has_commits(self.root):
             task.base_commit = gitutil.head(self.root)
         return self.root, None, False
+
+    def _inputs(self, task: Task) -> list[WorkerResult]:
+        out = []
+        for tid in dict.fromkeys([*task.context_tasks, *task.base_tasks]):
+            r = self.tasks.load_result(tid)
+            if r is not None:
+                out.append(r)
+        return out
+
+    def _base_branches(self, task: Task) -> list[str]:
+        """Branches of the tasks this one builds on. Integrated ones are already in HEAD and are skipped."""
+        out: list[str] = []
+        for tid in task.base_tasks:
+            base = self.tasks.load(tid)
+            if base.status == TaskStatus.INTEGRATED.value:
+                continue
+            if base.status != TaskStatus.SUCCESS.value or not base.branch or base.reuse_worktree_of:
+                raise AgentMeshError(f"base task {tid} is {base.status}; only SUCCESS tasks that own a branch can be built on",
+                                     ErrorCode.PROJECT_ERROR)
+            out.append(base.branch)
+        return out
 
     def _changed(self, cwd: Path, ref: str | None, pre_dirty: set[str]) -> list[str]:
         if ref is None or gitutil.repo_root(cwd) is None:
@@ -103,7 +130,8 @@ class Runner:
         notes: list[str] = []
         raw_final = None
 
-        while len(result.attempts) < max_attempts:
+        worker_attempts = 0
+        while worker_attempts < max_attempts:
             ranking = self.router.rank(task.role, exclude=tried, preferred=task.preferred_worker,
                                        avoid=set(task.avoid_workers))
             if not ranking.candidates:
@@ -116,41 +144,61 @@ class Runner:
             tried.add(worker)
             adapter, info = self.registry.get(worker), self.infos[worker]
             prompt = build_prompt(task, role_md, self.config.name, follow_up=follow_up, prior=prior,
-                                  fallback_note=handover)
+                                  fallback_note=handover, inputs=self._inputs(task))
             scratch = self.config.paths.runtime_dir / task.task_id
             scratch.mkdir(parents=True, exist_ok=True)
             ctx = RunContext(
                 task=task, prompt=prompt, cwd=cwd, timeout=task.timeout_seconds,
                 autonomy=self.config.role_autonomy(task.role),
                 continue_session=bool(prior and prior.worker == worker and info.session_continue == "YES"),
-                model=self.config.get(f"workers.models.{worker}"),
+                model=None,
                 extra_args=list(self.config.get(f"workers.extra_args.{worker}", []) or []),
                 scratch=scratch,
                 env={DEPTH_ENV: str(task.delegation_depth), "AGENTMESH_TASK_ID": task.task_id,
                      "AGENTMESH_ROLE": task.role})
             self.emit(f"[{task.task_id}] role={task.role} -> worker={worker}")
             self.state.record_use(worker)
-            try:
-                spec = adapter.build_command(ctx, info)
-                raw = adapter.execute(spec, run_id=f"{task.task_id}-{worker}")
-                norm = adapter.normalize_result(raw)
-                code = adapter.classify_error(raw, norm)
-            except UnsupportedError as e:
-                result.attempts.append(Attempt(worker, None, ErrorCode.UNSUPPORTED.value, 0.0, str(e)))
-                self.state.record_failure(worker, "UNSUPPORTED", self._cooldown("UNSUPPORTED"))
-                last_code, notes = ErrorCode.UNSUPPORTED, notes + [f"{worker}: {e}"]
+            models = self._model_chain(worker)
+            worker_attempts += 1
+            unsupported = False
+            for mi, model in enumerate(models):
+                ctx.model = model
+                if len(models) > 1:
+                    ctx.timeout = min(task.timeout_seconds, int(self.config.get("workers.model_timeout_seconds", 300)))
+                try:
+                    spec = adapter.build_command(ctx, info)
+                    raw = adapter.execute(spec, run_id=f"{task.task_id}-{worker}")
+                    norm = adapter.normalize_result(raw)
+                    code = adapter.classify_error(raw, norm)
+                except UnsupportedError as e:
+                    result.attempts.append(Attempt(worker, None, ErrorCode.UNSUPPORTED.value, 0.0, str(e)))
+                    self.state.record_failure(worker, "UNSUPPORTED", self._cooldown("UNSUPPORTED"))
+                    last_code, notes = ErrorCode.UNSUPPORTED, notes + [f"{worker}: {e}"]
+                    unsupported = True
+                    break
+                raw_final = raw
+                result.attempts.append(Attempt(worker, raw.exit_code, code.value if code else None, raw.duration,
+                                               f"model={model}" if model else ""))
+                result.worker, result.exit_code = worker, raw.exit_code
+                result.stdout, result.stderr = redact(raw.stdout)[-20000:], redact(raw.stderr)[-8000:]
+                result.summary, result.session_id = norm.summary, norm.session_id
+                self._write_log(task, worker, len(result.attempts), result)
+                evidence = (raw.stderr[-4000:] + "\n" + raw.stdout[-800:]) if code is not None else ""
+                if code is not None and model and mi < len(models) - 1 and code in INFRA_ERRORS \
+                        and code.value in fallback_on:
+                    # this model is bad right now: remember it, try the worker's next model
+                    self.state.record_failure(f"{worker}::{model}", code.value,
+                                              self._cooldown(code.value, evidence) or 600)
+                    self.emit(f"[{task.task_id}] {worker}/{model} -> {code.value}; trying next model")
+                    continue
+                break
+            if unsupported:
                 continue
-            raw_final = raw
-            result.attempts.append(Attempt(worker, raw.exit_code, code.value if code else None, raw.duration))
-            result.worker, result.exit_code = worker, raw.exit_code
-            result.stdout, result.stderr = redact(raw.stdout)[-20000:], redact(raw.stderr)[-8000:]
-            result.summary, result.session_id = norm.summary, norm.session_id
-            self._write_log(task, worker, len(result.attempts), result)
             if code is None:
                 self.state.record_success(worker)
                 last_code = None
                 break
-            self.state.record_failure(worker, code.value, self._cooldown(code.value))
+            self.state.record_failure(worker, code.value, self._cooldown(code.value, evidence))
             last_code = code
             notes.append(f"{worker}: {code.value}")
             if code.value not in fallback_on or code not in INFRA_ERRORS:
@@ -187,7 +235,19 @@ class Runner:
         return self._finish(task, result, error=last_code, summary=summary, keep_stdout=raw_final is not None)
 
     # ---- helpers ----
-    def _cooldown(self, code: str) -> int:
+    def _model_chain(self, worker: str) -> list[str | None]:
+        """Ordered models for a worker (workers.models.<worker>: str or list); known-bad ones are skipped."""
+        cfg = self.config.get(f"workers.models.{worker}")
+        models = [cfg] if isinstance(cfg, str) else [m for m in (cfg or []) if isinstance(m, str)]
+        if not models:
+            return [None]
+        live = [m for m in models if self.state.cooldown_remaining(f"{worker}::{m}") == 0]
+        return live or models
+
+    def _cooldown(self, code: str, evidence: str = "") -> int:
+        """Quota/rate limits: honour the reset time the provider printed; otherwise the configured default."""
+        if code in ("QUOTA_EXCEEDED", "RATE_LIMITED") and (secs := parse_retry_seconds(evidence)):
+            return secs
         return int(self.config.get("fallback.cooldown_seconds", {}).get(code, 0))
 
     def _write_log(self, task: Task, worker: str, n: int, result: WorkerResult) -> None:

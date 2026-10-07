@@ -182,3 +182,23 @@ def test_logs_are_sanitized(flutter_only):
     r = runner.run(new_task(cfg))
     blob = r.stdout + (cfg.paths.logs_dir / "task-001-1-w1.log").read_text()
     assert "sk-ABCDEF" not in blob and "supersecretvalue99" not in blob and "abcdefghijklmnop1234" not in blob
+
+
+def test_worker_model_chain_falls_over_models_before_other_workers(flutter_only):
+    reg = reg_of({"w1": ["TIMEOUT", "QUOTA_EXCEEDED", "SUCCESS"], "w2": "SUCCESS"})
+    runner, cfg = make_runner(flutter_only, reg, {**PREF, "workers": {"models": {"w1": ["m-a", "m-b", "m-c"]}}})
+    r = runner.run(new_task(cfg))
+    assert r.status == "SUCCESS" and r.worker == "w1" and not reg.get("w2").calls
+    assert [(a.normalized_error, a.note) for a in r.attempts] == [("TIMEOUT", "model=m-a"), ("QUOTA_EXCEEDED", "model=m-b"), (None, "model=m-c")]
+    assert [c.argv[-1] for c in reg.get("w1").calls] == ["m-a", "m-b", "m-c"]
+    # bad models are skipped next time
+    reg.get("w1").behaviors = ["SUCCESS"]
+    runner.run(new_task(cfg))
+    assert reg.get("w1").calls[-1].argv[-1] == "m-c"
+
+
+def test_all_models_failing_falls_to_next_worker(flutter_only):
+    reg = reg_of({"w1": "RATE_LIMITED", "w2": "SUCCESS"})
+    runner, cfg = make_runner(flutter_only, reg, {**PREF, "workers": {"models": {"w1": ["m-a", "m-b"]}}})
+    r = runner.run(new_task(cfg))
+    assert r.status == "SUCCESS" and r.worker == "w2" and len(reg.get("w1").calls) == 2

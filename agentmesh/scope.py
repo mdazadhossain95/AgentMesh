@@ -7,7 +7,7 @@ from functools import lru_cache
 
 @lru_cache(maxsize=512)
 def _compile(pattern: str) -> re.Pattern[str]:
-    pat = pattern.lstrip("./")
+    pat = pattern[2:] if pattern.startswith("./") else pattern      # NOT lstrip("./"): that also eats the dot of ".env"
     if pat.endswith("/"):
         pat += "**"
     out, i = "", 0
@@ -23,6 +23,7 @@ def _compile(pattern: str) -> re.Pattern[str]:
 
 
 def matches(path: str, patterns: list[str]) -> bool:
+    path = path[2:] if path.startswith("./") else path
     return any(_compile(p).match(path) for p in patterns)
 
 

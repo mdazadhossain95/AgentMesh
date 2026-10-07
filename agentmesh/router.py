@@ -44,6 +44,7 @@ class Router:
 
     def rank(self, role: str, *, strategy: str | None = None, exclude: set[str] | None = None,
              preferred: str | None = None, avoid: set[str] | None = None) -> Ranking:
+        self.state.refresh()
         strategy = strategy or self.config.get("routing.strategy", "balanced")
         exclude, avoid = set(exclude or ()), {self.registry.resolve(a) for a in (avoid or ())}
         res = lambda xs: [self.registry.resolve(x) for x in xs]

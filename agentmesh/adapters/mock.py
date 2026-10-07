@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import json
+import time
 from pathlib import Path
 
 from ..errors import ErrorCode
@@ -23,15 +24,19 @@ class MockAdapter(AgentAdapter):
     """behavior: one behavior, or a list consumed one per execute() call (last repeats)."""
 
     def __init__(self, name: str, behavior: str | list[str] = "SUCCESS", writes: dict[str, str] | None = None,
-                 report: dict | None = None):
+                 report: dict | None = None, messages: dict[str, str] | None = None,
+                 delay: float = 0.0):
         super().__init__()
         self.name = name
         self.display_name = f"Mock {name}"
         self.executables = (name,)
         self.behaviors = [behavior] if isinstance(behavior, str) else list(behavior)
         self.writes = writes if writes is not None else {"mock_output.txt": "hello from mock\n"}
+        self.messages = messages or {}
+        self.delay = delay
         self.report = report                  # override the self-report (to test distrust of worker claims)
         self.calls: list[CommandSpec] = []
+        self.seen_files: list[list[str]] = []     # files visible in the workspace at each run
 
     def detect(self, path_env: str | None = None) -> Path | None:
         return Path(f"/mock/bin/{self.name}")
@@ -47,10 +52,14 @@ class MockAdapter(AgentAdapter):
                          probed_at=utcnow())
 
     def build_command(self, ctx: RunContext, info: AgentInfo) -> CommandSpec:
-        return CommandSpec(argv=[self.name, "--mock"], cwd=ctx.cwd, timeout=ctx.timeout, stdin=ctx.prompt, env=ctx.env)
+        return CommandSpec(argv=[self.name, "--mock", *(["--model", ctx.model] if ctx.model else [])], cwd=ctx.cwd, timeout=ctx.timeout, stdin=ctx.prompt, env=ctx.env)
 
     def execute(self, spec: CommandSpec, run_id: str = "run") -> RawResult:
         self.calls.append(spec)
+        if self.delay:
+            time.sleep(self.delay)
+        self.seen_files.append(sorted(p.relative_to(spec.cwd).as_posix() for p in spec.cwd.rglob("*")
+                                      if p.is_file() and ".git" not in p.relative_to(spec.cwd).parts))
         behavior = self.behaviors.pop(0) if len(self.behaviors) > 1 else self.behaviors[0]
         raw = RawResult(exit_code=0, started_at=utcnow(), finished_at=utcnow())
         if behavior == "CLI_NOT_FOUND":
@@ -58,7 +67,7 @@ class MockAdapter(AgentAdapter):
         elif behavior == "TIMEOUT":
             raw.timed_out, raw.exit_code = True, None
         elif behavior in _STDERR:
-            raw.exit_code, raw.stderr = 1, _STDERR[behavior]
+            raw.exit_code, raw.stderr = 1, self.messages.get(behavior, _STDERR[behavior])
         else:
             if behavior == "SUCCESS":
                 for rel, content in self.writes.items():

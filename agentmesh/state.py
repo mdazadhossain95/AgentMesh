@@ -6,15 +6,22 @@ import time
 from pathlib import Path
 from typing import Any, Callable
 
+from .locking import file_lock
+
 
 class RuntimeState:
     def __init__(self, path: Path, clock: Callable[[], float] = time.time):
         self.path = path
         self.clock = clock
+        self.lock_path = path.with_suffix(".lock")
         self.data: dict[str, Any] = {"workers": {}}
-        if path.is_file():
+        self.refresh()
+
+    def refresh(self) -> None:
+        """Re-read from disk: other tasks (threads or processes) may have recorded failures meanwhile."""
+        if self.path.is_file():
             try:
-                self.data = json.loads(path.read_text(encoding="utf-8"))
+                self.data = json.loads(self.path.read_text(encoding="utf-8"))
             except json.JSONDecodeError:
                 pass
 
@@ -24,31 +31,46 @@ class RuntimeState:
 
     def save(self) -> None:
         self.path.parent.mkdir(parents=True, exist_ok=True)
-        self.path.write_text(json.dumps(self.data, indent=2), encoding="utf-8")
+        tmp = self.path.with_suffix(f".tmp{id(self)}")
+        tmp.write_text(json.dumps(self.data, indent=2), encoding="utf-8")
+        tmp.replace(self.path)               # atomic: readers never see a half-written file
 
     def record_use(self, worker: str) -> None:
-        w = self._w(worker)
-        w["uses"] += 1
-        w["last_used"] = self.clock()
-        self.save()
+        with file_lock(self.lock_path):
+            self.refresh()
+            w = self._w(worker)
+            w["uses"] += 1
+            w["last_used"] = self.clock()
+            self.save()
 
     def record_success(self, worker: str) -> None:
-        w = self._w(worker)
-        w["cooldown_until"], w["last_error"] = 0.0, None
-        self.save()
+        with file_lock(self.lock_path):
+            self.refresh()
+            w = self._w(worker)
+            w["cooldown_until"], w["last_error"] = 0.0, None
+            self.save()
 
     def record_failure(self, worker: str, code: str, cooldown_seconds: int = 0) -> None:
-        w = self._w(worker)
-        now = self.clock()
-        w["last_error"] = code
-        w["recent_failures"] = (w["recent_failures"] + [{"code": code, "at": now}])[-10:]
-        if cooldown_seconds > 0:
-            w["cooldown_until"] = now + cooldown_seconds
-        self.save()
+        with file_lock(self.lock_path):
+            self.refresh()
+            w = self._w(worker)
+            now = self.clock()
+            w["last_error"] = code
+            w["recent_failures"] = (w["recent_failures"] + [{"code": code, "at": now}])[-10:]
+            if cooldown_seconds > 0:
+                w["cooldown_until"] = now + cooldown_seconds
+            self.save()
 
     def cooldown_remaining(self, worker: str) -> int:
         until = self.data.get("workers", {}).get(worker, {}).get("cooldown_until", 0.0)
         return max(0, int(until - self.clock()))
+
+    def cooling(self) -> dict[str, int]:
+        """Everything currently cooling down (workers and 'worker::model' keys) -> seconds left."""
+        return {k: r for k in self.data.get("workers", {}) if (r := self.cooldown_remaining(k)) > 0}
+
+    def last_error(self, key: str) -> str | None:
+        return self.data.get("workers", {}).get(key, {}).get("last_error")
 
     def uses(self, worker: str) -> int:
         return int(self.data.get("workers", {}).get(worker, {}).get("uses", 0))

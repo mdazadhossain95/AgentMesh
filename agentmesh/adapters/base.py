@@ -124,7 +124,10 @@ class AgentAdapter(ABC):
         if code != 0 or not out:
             return None
         lines = [ln.strip() for ln in out.splitlines() if ln.strip()]
-        return lines[-1][:80] if lines else None
+        if not lines:
+            return None
+        numbered = [ln for ln in lines if re.search(r"\d+\.\d+", ln)]
+        return (numbered[0] if numbered else lines[-1])[:80]
 
     def health_check(self, path_env: str | None = None) -> AgentInfo:
         """Detect + parse the CLI's own help. Free: never starts a model session."""

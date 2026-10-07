@@ -44,7 +44,7 @@ def new_task(cfg: ProjectConfig, role: str = "app-engineer", **kw) -> Task:
     spec = cfg.roles()[role]
     tm = TaskManager(cfg.paths)
     t = Task(task_id=tm.next_id(), title=kw.pop("title", "t"), role=role, capability=spec["capability"],
-             project_root=str(cfg.paths.root), allowed_paths=spec["allowed_paths"], forbidden_paths=spec["forbidden_paths"],
+             project_root=str(cfg.paths.root), allowed_paths=kw.pop("allowed_paths", spec["allowed_paths"]), forbidden_paths=spec["forbidden_paths"],
              isolation=kw.pop("isolation", "worktree" if spec["capability"] == "write" else "inplace"), **kw)
     tm.save(t)
     return t

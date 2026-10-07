@@ -7,7 +7,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Callable
 
-from . import bootstrap, discovery, fsutil, gitutil
+from . import benchmark, bootstrap, discovery, enforcement, fsutil, gitutil
 from .config import (DEFAULT_QUALITY_ORDER, DEFAULTS, MACHINE_KEYS, SCHEMA_VERSION, ProjectPaths, deep_merge,
                      dump_yaml, load_yaml)
 from .errors import ProjectError
@@ -139,11 +139,22 @@ def init_project(root: Path, registry: Registry, *, asker: Asker | None = None, 
     if "preferred_order" in (human.get("routing") or {}):
         defaults["routing"].pop("preferred_order")
     human = deep_merge(defaults, human)
+    if "quality_order" not in (existing.get("routing") or {}) and (order := benchmark.measured_quality_order()):
+        human["routing"]["quality_order"] = order       # quality-first strategy follows measured results when they exist
     human["manager"]["default"] = mgr
     extra = bootstrap.MANAGER_FILES.get(mgr)
     if extra and extra not in human["manager"]["bootstrap_files"]:
         human["manager"]["bootstrap_files"] = [*human["manager"]["bootstrap_files"], extra]
     human["references"] = refs
+    models = human["workers"].setdefault("models", {})
+    from .adapters import kilo as kilo_mod, kiro as kiro_mod, opencode as opencode_mod
+    for wname, mod in (("opencode", opencode_mod), ("kilo", kilo_mod), ("kiro", kiro_mod)):
+        if wname in ready and wname not in models:
+            wpath = next((a.path for a in rep.agents if a.name == wname), None)
+            available = mod.available_models(wpath)
+            chain = benchmark.measured_chain(wname, available) or mod.available_preferred_models(wpath)   # measured beats guessed
+            if chain:
+                models[wname] = chain       # tried in order on timeout/quota/rate-limit before another CLI is used
     commands = [{"component": c.path, **v} for c in profile.components for v in c.verification]
     data = {
         "schema": SCHEMA_VERSION,
@@ -177,6 +188,10 @@ def init_project(root: Path, registry: Registry, *, asker: Asker | None = None, 
                                         int(wf["limits"]["max_correction_rounds"]))
     for f, status in bootstrap.write_manager_files(root, human["manager"]["bootstrap_files"], section, dry_run).items():
         act[f] = status
+    if human["enforcement"].get("claude_hooks", True) and human["enforcement"].get("mode") != "off":
+        act[".claude/settings.json"] = enforcement.install_claude_hooks(root, dry_run)
+        if act[".claude/settings.json"] == "kept":
+            out.warnings.append(".claude/settings.json is not valid JSON: Claude hooks not installed")
     if not ready:
         out.warnings.append("no READY worker CLI found: delegation will fail until one is installed (see `agentmesh discover`)")
     elif len(ready) == 1:

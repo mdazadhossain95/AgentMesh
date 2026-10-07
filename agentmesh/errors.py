@@ -61,6 +61,27 @@ def classify_text(text: str) -> ErrorCode | None:
     return None
 
 
+_UNITS = {"s": 1, "sec": 1, "second": 1, "m": 60, "min": 60, "minute": 60, "h": 3600, "hr": 3600, "hour": 3600,
+          "d": 86400, "day": 86400}
+_RETRY_AFTER = re.compile(r"retry[- ]after[:= ]+(\d+)")
+_IN_TIME = re.compile(r"\b(?:in|after|within)\s+(\d+(?:\.\d+)?)\s*(seconds?|secs?|minutes?|mins?|hours?|hrs?|days?|s|m|h|d)\b")
+
+
+def parse_retry_seconds(text: str) -> int | None:
+    """Reset/retry delay announced by the provider itself ('try again in 2 hours', 'Retry-After: 30'), clamped to
+    30s..7d. None when the message gives no duration: callers then use their configured default."""
+    low = text.lower()
+    m = _RETRY_AFTER.search(low)
+    if m:
+        secs = float(m.group(1))
+    else:
+        m = _IN_TIME.search(low)
+        if not m:
+            return None
+        secs = float(m.group(1)) * _UNITS[m.group(2).rstrip("s") if m.group(2) not in ("s",) else "s"]
+    return int(min(max(secs, 30), 7 * 86400))
+
+
 class AgentMeshError(Exception):
     code: ErrorCode = ErrorCode.UNKNOWN_ERROR
 

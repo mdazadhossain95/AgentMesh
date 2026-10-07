@@ -14,7 +14,7 @@ GI_END = "# AGENTMESH:END"
 # Files each manager CLI reads as project instructions. CLAUDE.md and AGENTS.md are the defaults;
 # GEMINI.md / QWEN.md are those CLIs' documented context-file names and are only written when asked.
 MANAGER_FILES = {"claude": "CLAUDE.md", "codex": "AGENTS.md", "opencode": "AGENTS.md",
-                 "gemini": "GEMINI.md", "qwen": "QWEN.md"}
+                 "qwen": "QWEN.md"}
 
 
 def _template(rel: str) -> str:
