@@ -1,0 +1,15 @@
+__pycache__/
+*.pyc
+.venv/
+*.egg-info/
+build/
+dist/
+.pytest_cache/
+.DS_Store
+# AgentMesh runtime when dogfooding
+.agentmesh/runtime/
+.agentmesh/logs/
+.agentmesh/state/
+.agentmesh-worktrees/
+.env
+.env.*

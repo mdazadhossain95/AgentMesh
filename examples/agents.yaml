@@ -1,0 +1,15 @@
+# Copy to ~/.agentmesh/agents.yaml
+# Registers CLIs that have no built-in adapter. Nothing here is verified by AgentMesh:
+# the flags come from YOU (read the tool's --help). Check with `agentmesh discover`
+# and, if you accept one tiny paid call, `agentmesh smoke <name> --yes`.
+agents:
+  aider:
+    executable: aider
+    display_name: Aider
+    headless_args: ["--message", "{prompt}", "--yes-always"]   # example only: confirm against `aider --help`
+    version_args: ["--version"]
+
+  # Give Kilo (placeholder adapter, CONFIGURATION_REQUIRED by default) a real invocation:
+  # kilo:
+  #   executable: kilo
+  #   headless_args: ["run", "{prompt}"]                       # <- replace with what `kilo --help` documents

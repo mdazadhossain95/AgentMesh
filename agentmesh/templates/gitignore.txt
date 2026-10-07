@@ -1,0 +1,4 @@
+.agentmesh/runtime/
+.agentmesh/logs/
+.agentmesh/state/
+.agentmesh-worktrees/
