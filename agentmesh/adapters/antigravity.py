@@ -3,9 +3,9 @@ from __future__ import annotations
 from ..models import AgentInfo
 from .base import AgentAdapter, CommandSpec, RunContext, probe_command
 
-# Live benchmark 2026-10-08 (4 hidden-test tasks): the CLI's default model scored 38-62%, gemini-3.1-pro-high 75%,
-# gemini-3.8-flash-high 0%; claude-sonnet-4-6 hit QUOTA_EXCEEDED.
-PREFERRED_MODELS = ("gemini-3.1-pro-high",)
+# Live benchmark 2026-10-08 (4 hidden-test tasks): the CLI's default model scored 38-62%, gemini-3.1-pro-high and
+# gemini-3.7-flash-high 75% (3.7 is faster), gemini-3.8-flash-high 0%; claude/gpt-oss models hit QUOTA_EXCEEDED.
+PREFERRED_MODELS = ("gemini-3.7-flash-high", "gemini-3.1-pro-high")
 
 
 def available_models(path: str | None = None) -> list[str]:

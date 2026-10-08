@@ -40,6 +40,10 @@ def parse_duration(s):
 ''',
 }
 
+from bench_refs import HARD
+
+REFERENCE.update(HARD)
+
 
 def test_reference_solutions_score_100_and_stubs_score_0(tmp_path):
     for t in bm.TASKS:
@@ -74,7 +78,7 @@ def test_partial_credit_and_broken_code(tmp_path):
 
 
 def _r(worker, model, scores, secs=10.0, err=None):
-    return CandidateResult(worker, model, [TaskScore(f"t{i}", s, secs, err) for i, s in enumerate(scores)])
+    return CandidateResult(worker, model, [TaskScore(f"t{i}", s, secs, err) for i, s in enumerate(scores)], planned=len(scores))
 
 
 def test_ranking_and_suggestions():

@@ -155,6 +155,121 @@ TASKS: list[BenchTask] = [
             def test_garbage(self):
                 with self.assertRaises(ValueError): parse_duration("abc")
         ''')),
+    BenchTask("expr", "hard: parser, precedence",
+        "Implement evaluate(expr: str) -> float for arithmetic expressions. Supports + - * / ** and parentheses, unary + and -, "
+        "integers and decimals (e.g. '1.5', '.5'), and whitespace anywhere between tokens. / is true division. Precedence: ** "
+        "binds tighter than unary minus on its left, so -2**2 is -4; ** is right-associative (2**3**2 is 512) and its exponent "
+        "may be signed (2**-1 is 0.5); * / bind tighter than + -, and all of + - * / are left-associative. Division by zero raises "
+        "ZeroDivisionError. Any other invalid input (empty or blank, unbalanced parentheses, empty parentheses, a dangling operator, "
+        "two numbers in a row, unknown characters, a lone '.') raises ValueError. Do not use eval, exec or ast.",
+        "def evaluate(expr: str) -> float:\n    raise NotImplementedError\n",
+        "import unittest\nfrom solution import evaluate\n\nclass T(unittest.TestCase):\n"
+        "    def test_basic(self):\n        self.assertEqual(evaluate('1+2*3'), 7)\n",
+        textwrap.dedent('''\
+        import unittest
+        from solution import evaluate
+
+        class H(unittest.TestCase):
+            def test_prec(self): self.assertEqual(evaluate("1+2*3"), 7)
+            def test_parens(self): self.assertEqual(evaluate("(1+2)*3"), 9)
+            def test_div(self): self.assertEqual(evaluate("10/4"), 2.5)
+            def test_left_assoc(self):
+                self.assertEqual(evaluate("8/2/2"), 2); self.assertEqual(evaluate("2-3-4"), -5)
+            def test_pow_right_assoc(self): self.assertEqual(evaluate("2**3**2"), 512)
+            def test_unary_vs_pow(self): self.assertEqual(evaluate("-2**2"), -4)
+            def test_signed_exponent(self): self.assertAlmostEqual(evaluate("2**-1"), 0.5)
+            def test_double_unary(self):
+                self.assertEqual(evaluate("--3"), 3); self.assertEqual(evaluate("1 - -1"), 2)
+            def test_unary_paren(self): self.assertEqual(evaluate("-(2+3)"), -5)
+            def test_decimals(self):
+                self.assertAlmostEqual(evaluate("1.5*2"), 3.0); self.assertAlmostEqual(evaluate(".5+.5"), 1.0)
+            def test_whitespace(self): self.assertEqual(evaluate("  3 "), 3)
+            def test_zero_div(self):
+                with self.assertRaises(ZeroDivisionError): evaluate("1/0")
+            def test_invalid(self):
+                for bad in ["", "   ", "1+", "(1", "1)", "1 2", "a", "1+*2", "()", ".", "2*(3+)", "1..2"]:
+                    with self.subTest(bad=bad):
+                        with self.assertRaises(ValueError): evaluate(bad)
+        ''')),
+    BenchTask("bucket", "hard: bug fix, several bugs",
+        "TokenBucket in solution.py has several bugs. Spec: TokenBucket(capacity, rate, clock=time.monotonic); the bucket starts full; "
+        "tokens refill continuously at `rate` per second as reported by clock(), never exceeding capacity; allow(n=1) returns True and "
+        "consumes n tokens when at least n are available (exactly n is enough), otherwise returns False and consumes nothing; "
+        "n <= 0 raises ValueError; remaining() returns the current token count (as a float, after refilling). "
+        "Fix the code in solution.py.",
+        "import time\n\n\nclass TokenBucket:\n    def __init__(self, capacity, rate, clock=time.monotonic):\n"
+        "        self.capacity = capacity\n        self.rate = rate\n        self.clock = clock\n        self.tokens = 0\n"
+        "        self.last = clock()\n\n    def _refill(self):\n        now = self.clock()\n"
+        "        self.tokens += (now - self.last) * self.rate\n        self.last = now\n\n"
+        "    def allow(self, n=1):\n        self._refill()\n        if self.tokens > n:\n            self.tokens -= n\n"
+        "            return True\n        return False\n\n    def remaining(self):\n        return self.tokens\n",
+        "import unittest\nfrom solution import TokenBucket\n\nclass T(unittest.TestCase):\n"
+        "    def test_starts_full(self):\n        now = [0.0]\n        b = TokenBucket(3, 1, clock=lambda: now[0])\n"
+        "        self.assertTrue(b.allow(3))\n",
+        textwrap.dedent('''\
+        import unittest
+        from solution import TokenBucket
+
+        def make(cap, rate):
+            now = [0.0]
+            return TokenBucket(cap, rate, clock=lambda: now[0]), now
+
+        class H(unittest.TestCase):
+            def test_starts_full(self):
+                b, _ = make(3, 1); self.assertTrue(b.allow(3))
+            def test_exact_is_enough(self):
+                b, _ = make(5, 1); self.assertTrue(b.allow(5)); self.assertFalse(b.allow(1))
+            def test_denied_consumes_nothing(self):
+                b, _ = make(2, 1); self.assertFalse(b.allow(3)); self.assertTrue(b.allow(2))
+            def test_refill(self):
+                b, now = make(10, 2); b.allow(10); now[0] = 3; self.assertAlmostEqual(b.remaining(), 6.0)
+            def test_cap(self):
+                b, now = make(4, 10); b.allow(4); now[0] = 100; self.assertAlmostEqual(b.remaining(), 4.0)
+            def test_refill_then_allow(self):
+                b, now = make(10, 1); b.allow(10); now[0] = 2; self.assertFalse(b.allow(3)); now[0] = 3
+                self.assertTrue(b.allow(3))
+            def test_denied_keeps_time_progress(self):
+                b, now = make(10, 1); b.allow(10); now[0] = 1; b.allow(5); now[0] = 2
+                self.assertAlmostEqual(b.remaining(), 2.0)
+            def test_bad_n(self):
+                b, _ = make(3, 1)
+                for n in (0, -1):
+                    with self.assertRaises(ValueError): b.allow(n)
+            def test_remaining_full(self):
+                b, _ = make(7, 1); self.assertAlmostEqual(b.remaining(), 7.0)
+        ''')),
+    BenchTask("toposort", "medium-hard: graph + deterministic order",
+        "Implement toposort(graph: dict) -> list. graph maps each node to the list of nodes it depends on (they must come "
+        "before it). Nodes that only appear as dependencies are included too. Output must be deterministic: at every step, "
+        "among all nodes whose dependencies are already placed, output the smallest one (normal < ordering). Duplicate entries "
+        "in a dependency list are harmless. A cycle, including a node depending on itself, raises ValueError. The input must "
+        "not be modified. Empty graph returns [].",
+        "def toposort(graph):\n    raise NotImplementedError\n",
+        "import unittest\nfrom solution import toposort\n\nclass T(unittest.TestCase):\n"
+        "    def test_chain(self):\n        self.assertEqual(toposort({'a': ['b'], 'b': []}), ['b', 'a'])\n",
+        textwrap.dedent('''\
+        import unittest
+        from solution import toposort
+
+        class H(unittest.TestCase):
+            def test_chain(self): self.assertEqual(toposort({"a": ["b"], "b": ["c"], "c": []}), ["c", "b", "a"])
+            def test_empty(self): self.assertEqual(toposort({}), [])
+            def test_alpha_ties(self): self.assertEqual(toposort({"b": [], "a": []}), ["a", "b"])
+            def test_greedy_smallest(self):
+                self.assertEqual(toposort({"d": ["a"], "c": ["a"], "b": [], "a": []}), ["a", "b", "c", "d"])
+            def test_waits_for_all_deps(self):
+                self.assertEqual(toposort({"x": [], "a": [], "m": ["a", "x"]}), ["a", "x", "m"])
+            def test_dep_only_nodes(self): self.assertEqual(toposort({"a": ["z"]}), ["z", "a"])
+            def test_duplicates(self): self.assertEqual(toposort({"a": ["b", "b"]}), ["b", "a"])
+            def test_cycle(self):
+                with self.assertRaises(ValueError): toposort({"a": ["b"], "b": ["a"]})
+            def test_self_loop(self):
+                with self.assertRaises(ValueError): toposort({"a": ["a"]})
+            def test_partial_cycle(self):
+                with self.assertRaises(ValueError): toposort({"ok": [], "a": ["b"], "b": ["c"], "c": ["a"]})
+            def test_no_mutation(self):
+                g = {"a": ["b"], "b": []}; toposort(g); self.assertEqual(g, {"a": ["b"], "b": []})
+        ''')),
 ]
 
 PROMPT = ("The current directory has solution.py and test_solution.py.\n{spec}\n"
@@ -181,10 +296,11 @@ class CandidateResult:
     worker: str
     model: str | None
     scores: list[TaskScore] = field(default_factory=list)
+    planned: int = 0          # tasks this candidate was meant to run; tasks skipped after early stop count as 0
 
     @property
     def total(self) -> float:
-        return sum(s.score for s in self.scores) / max(len(TASKS), 1)
+        return sum(s.score for s in self.scores) / max(self.planned or len(TASKS), 1)
 
     @property
     def seconds(self) -> float:
@@ -254,7 +370,7 @@ def run_benchmark(registry: Registry, infos: dict[str, AgentInfo], cands: list[t
 
     def one(c: tuple[str, str | None]) -> CandidateResult:
         worker, model = c
-        res = CandidateResult(worker, model)
+        res = CandidateResult(worker, model, planned=len(tasks))
         with sems[worker]:
             for t in tasks:
                 s = run_one(registry, infos[worker], model, t, timeout)
