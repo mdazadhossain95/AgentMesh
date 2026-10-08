@@ -32,3 +32,6 @@ Benchmark (agentmesh benchmark, live): results in ~/.agentmesh/benchmark.json; i
 
 ## 4. Next ideas
 Live smoke per worker + store results; parse more structured outputs; parallel runner; semantic task classification; `agentmesh adopt` for existing agent packs.
+
+## 5. Benchmark state (2026-10-08)
+7 tasks now (added expr, bucket, toposort; reference solutions in tests/bench_refs.py). 7-task run: claude, copilot, codex, cline, kiro (deepseek-3.2, claude-sonnet-4.5, auto, claude-haiku-4.5) all 100%; kiro minimax/glm/qwen 99% (expr 0.9); antigravity 71% (gemini-3.7-flash-high, 3.1-pro-high; slugify 0). Top group still not separated -> use speed as tiebreak. Kilo/opencode entries in benchmark.json are older 4-task scores (not comparable); re-run to refresh. Antigravity chain seeded: gemini-3.7-flash-high, gemini-3.1-pro-high.
