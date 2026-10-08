@@ -9,7 +9,9 @@ from . import gitutil, scope
 from .adapters.base import RunContext
 from .config import ProjectConfig
 from .errors import AgentMeshError, ErrorCode, INFRA_ERRORS, UnsupportedError, parse_retry_seconds
+from .benchmark import load_saved
 from .models import Attempt, AgentInfo, Task, TaskStatus, WorkerResult, utcnow
+from .progress import Heartbeat, typical_seconds
 from .prompting import build_prompt, parse_report, read_role
 from .registry import Registry
 from .router import Router
@@ -130,6 +132,7 @@ class Runner:
         notes: list[str] = []
         raw_final = None
 
+        bench_rows = load_saved()
         worker_attempts = 0
         while worker_attempts < max_attempts:
             ranking = self.router.rank(task.role, exclude=tried, preferred=task.preferred_worker,
@@ -167,7 +170,11 @@ class Runner:
                     ctx.timeout = min(task.timeout_seconds, int(self.config.get("workers.model_timeout_seconds", 300)))
                 try:
                     spec = adapter.build_command(ctx, info)
-                    raw = adapter.execute(spec, run_id=f"{task.task_id}-{worker}")
+                    hb = Heartbeat(self.emit, f"[{task.task_id}] {worker}/{model or 'default'}", ctx.timeout,
+                                   typical_seconds(worker, model, bench_rows),
+                                   interval=float(self.config.get("progress.interval_seconds", 15)))
+                    with hb:
+                        raw = adapter.execute(spec, run_id=f"{task.task_id}-{worker}")
                     norm = adapter.normalize_result(raw)
                     code = adapter.classify_error(raw, norm)
                 except UnsupportedError as e:
