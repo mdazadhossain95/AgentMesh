@@ -147,8 +147,8 @@ def init_project(root: Path, registry: Registry, *, asker: Asker | None = None, 
         human["manager"]["bootstrap_files"] = [*human["manager"]["bootstrap_files"], extra]
     human["references"] = refs
     models = human["workers"].setdefault("models", {})
-    from .adapters import kilo as kilo_mod, kiro as kiro_mod, opencode as opencode_mod
-    for wname, mod in (("opencode", opencode_mod), ("kilo", kilo_mod), ("kiro", kiro_mod)):
+    from .adapters import antigravity as ag_mod, kilo as kilo_mod, kiro as kiro_mod, opencode as opencode_mod
+    for wname, mod in (("opencode", opencode_mod), ("kilo", kilo_mod), ("kiro", kiro_mod), ("antigravity", ag_mod)):
         if wname in ready and wname not in models:
             wpath = next((a.path for a in rep.agents if a.name == wname), None)
             available = mod.available_models(wpath)

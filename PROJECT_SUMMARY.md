@@ -28,7 +28,7 @@ Added after MVP: model chains per worker (opencode/kilo/kiro), limit-aware coold
 
 Live progress (progress.py): while a worker runs, stderr shows `[task] worker/model started (timeout, typical ~Ns from benchmark)`, then a line every `progress.interval_seconds` (default 15) with elapsed, ~left, timeout; plus finished time. ETA is rough (benchmark tasks are small).
 
-Benchmark (agentmesh benchmark, live): results in ~/.agentmesh/benchmark.json; init uses them for model chains + quality_order. Open items: antigravity scored 38% (check its --print prompt form / default model); opencode seeded models were still being measured when the session ended (re-run `agentmesh benchmark --workers opencode --yes` if benchmark.json lacks them); tasks too easy to separate the top group; qwen and command-code removed on request (restore from git history).
+Benchmark (agentmesh benchmark, live): results in ~/.agentmesh/benchmark.json; init uses them for model chains + quality_order. Antigravity: command form is fine (edits work); the CLI default model scored 38-62%, gemini-3.1-pro-high 75%, gemini-3.8-flash-high 0%, claude-sonnet-4-6 QUOTA_EXCEEDED -> init now seeds workers.models.antigravity=[gemini-3.1-pro-high] (list via `agy models`). Opencode benchmark done. Progress ETA is a small-task baseline, not a real estimate. Open items: tasks too easy to separate the top group; qwen and command-code removed on request (restore from git history).
 
 ## 4. Next ideas
 Live smoke per worker + store results; parse more structured outputs; parallel runner; semantic task classification; `agentmesh adopt` for existing agent packs.

@@ -630,7 +630,7 @@ def cmd_benchmark(args: argparse.Namespace) -> int:
     lists: dict[str, list[str]] = {}
     if cfg:
         lists = {w: list(m) for w, m in (cfg.get("workers.models") or {}).items() if isinstance(m, list)}
-    from .adapters import kilo as kilo_mod, kiro as kiro_mod, opencode as oc_mod
+    from .adapters import antigravity as ag_mod, kilo as kilo_mod, kiro as kiro_mod, opencode as oc_mod
     if args.wide:                                    # every candidate model the CLIs report, not just the seeded chains
         if infos.get("kilo") and infos["kilo"].ready:
             code, txt = oc_mod.probe_command([infos["kilo"].path or "kilo", "models"], timeout=45)
@@ -645,7 +645,7 @@ def cmd_benchmark(args: argparse.Namespace) -> int:
             except (ValueError, KeyError):
                 pass
     else:
-        for name, mod in (("opencode", oc_mod), ("kilo", kilo_mod), ("kiro", kiro_mod)):
+        for name, mod in (("opencode", oc_mod), ("kilo", kilo_mod), ("kiro", kiro_mod), ("antigravity", ag_mod)):
             if name not in lists and infos.get(name) and infos[name].ready:
                 lists[name] = mod.available_preferred_models(infos[name].path)
     only = {registry.resolve(w) for w in args.workers.split(",")} if args.workers else None

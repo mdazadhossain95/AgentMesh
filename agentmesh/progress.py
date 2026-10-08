@@ -32,14 +32,14 @@ class Heartbeat:
         self._thread = threading.Thread(target=self._loop, daemon=True)
 
     def start_line(self) -> str:
-        eta = f", typical ~{fmt(self.typical)}" if self.typical else ""
+        eta = f", small-task baseline ~{fmt(self.typical)}" if self.typical else ""
         return f"{self.label} started (timeout {fmt(self.timeout)}{eta})"
 
     def status_line(self, elapsed: float) -> str:
         parts = [f"{self.label} running {fmt(elapsed)}"]
         if self.typical:
             left = self.typical - elapsed
-            parts.append(f"~{fmt(left)} left" if left > 0 else "past typical time")
+            parts.append(f"~{fmt(left)} left" if left > 0 else "over the small-task baseline")
         parts.append(f"timeout in {fmt(max(0, self.timeout - elapsed))}")
         return ", ".join(parts)
 

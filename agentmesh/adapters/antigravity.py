@@ -1,7 +1,23 @@
 from __future__ import annotations
 
 from ..models import AgentInfo
-from .base import AgentAdapter, CommandSpec, RunContext
+from .base import AgentAdapter, CommandSpec, RunContext, probe_command
+
+# Live benchmark 2026-10-08 (4 hidden-test tasks): the CLI's default model scored 38-62%, gemini-3.1-pro-high 75%,
+# gemini-3.8-flash-high 0%; claude-sonnet-4-6 hit QUOTA_EXCEEDED.
+PREFERRED_MODELS = ("gemini-3.1-pro-high",)
+
+
+def available_models(path: str | None = None) -> list[str]:
+    code, out = probe_command([path or "agy", "models"], timeout=45)
+    if code != 0:
+        return []
+    return [line.split("\t")[0].strip() for line in out.splitlines() if "\t" in line]
+
+
+def available_preferred_models(path: str | None = None) -> list[str]:
+    have = set(available_models(path))
+    return [m for m in PREFERRED_MODELS if m in have]
 
 
 class AntigravityAdapter(AgentAdapter):

@@ -20,6 +20,6 @@ def test_heartbeat_emits_start_ticks_finish():
     lines = []
     with Heartbeat(lines.append, "[t1] codex/default", 300, typical=20, interval=0.05):
         time.sleep(0.2)
-    assert "started" in lines[0] and "typical ~20s" in lines[0]
+    assert "started" in lines[0] and "baseline ~20s" in lines[0]
     assert any("running" in l and "left" in l for l in lines[1:-1])
     assert "finished" in lines[-1]
