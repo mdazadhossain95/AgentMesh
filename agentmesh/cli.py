@@ -188,6 +188,9 @@ def cmd_init(args: argparse.Namespace) -> int:
         out(f"assumption: {a}")
     for w in rep.warnings:
         out(f"warning: {w}")
+    from . import benchmark as _bm
+    for m in _bm.stale_messages(discovery.current(build_registry()).by_name()):
+        out(f"benchmark: {m}")
     if not args.dry_run:
         out(f"\nNext: review .agentmesh/, commit it, then run `agentmesh launch {rep.manager}` (or just `{rep.manager}`).")
     return 0
@@ -660,7 +663,7 @@ def cmd_benchmark(args: argparse.Namespace) -> int:
         return 1
     results = bm.run_benchmark(registry, infos, cands, tasks=tasks, parallel=args.parallel, per_worker=args.per_worker,
                                timeout=args.timeout, emit=err)
-    path = bm.save(results)
+    path = bm.save(results, {w: i.version for w, i in infos.items()})
     rows = [[f"{i}", r.worker, r.model or "(default)", f"{r.total * 100:.0f}%", f"{r.seconds:.0f}s",
              " ".join(f"{s.score:.1f}" for s in r.scores), ",".join(r.errors)] for i, r in enumerate(bm.ranked(results), 1)]
     out("\n" + table(rows, ["#", "WORKER", "MODEL", "SCORE", "AVG TIME", "PER TASK", "ERRORS"]))

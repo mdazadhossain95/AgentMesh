@@ -105,3 +105,36 @@ def test_candidates_skip_unusable_and_expand_model_lists():
     assert bm.candidates(reg, infos, {}, only={"claude"}) == [("claude", None)]
     infos["claude"].state = "UNVERIFIED"
     assert ("claude", None) not in bm.candidates(reg, infos, {})
+
+
+def _info(name, version="1.0", ready=True):
+    from agentmesh.models import AgentInfo
+    return AgentInfo(name=name, display_name=name, adapter=name, installed=True, version=version,
+                     state="READY" if ready else "UNVERIFIED")
+
+
+def test_stale_messages_age_version_and_task_count():
+    from datetime import datetime, timezone
+    from agentmesh.benchmark import stale_messages
+    now = datetime(2026, 10, 8, tzinfo=timezone.utc)
+    all_tasks = [{"task": t.id} for t in bm.TASKS]
+    rows = [
+        {"worker": "fresh", "model": None, "at": "2026-10-01T00:00:00+00:00", "cli_version": "1.0", "tasks": all_tasks},
+        {"worker": "old", "model": None, "at": "2026-08-01T00:00:00+00:00", "cli_version": "1.0", "tasks": all_tasks},
+        {"worker": "bumped", "model": None, "at": "2026-10-01T00:00:00+00:00", "cli_version": "0.9", "tasks": all_tasks},
+        {"worker": "short", "model": None, "at": "2026-10-01T00:00:00+00:00", "cli_version": "1.0", "tasks": all_tasks[:4]},
+    ]
+    infos = {n: _info(n) for n in ("fresh", "old", "bumped", "short", "never")}
+    msgs = {m.split(":")[0]: m for m in stale_messages(infos, rows, now)}
+    assert "fresh" not in msgs
+    assert "days ago" in msgs["old"] and "CLI is now 1.0" in msgs["bumped"] and "fewer than" in msgs["short"]
+    assert "no benchmark scores" in msgs["never"]
+
+
+def test_stale_ignores_unready_workers_and_missing_version_in_old_rows():
+    from datetime import datetime, timezone
+    from agentmesh.benchmark import stale_messages
+    now = datetime(2026, 10, 8, tzinfo=timezone.utc)
+    rows = [{"worker": "legacy", "model": None, "at": "2026-10-07T00:00:00+00:00", "tasks": [{"task": t.id} for t in bm.TASKS]}]
+    infos = {"legacy": _info("legacy", version="2.0"), "off": _info("off", ready=False)}
+    assert stale_messages(infos, rows, now) == []

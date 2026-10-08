@@ -15,6 +15,7 @@ import threading
 import time
 from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass, field
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Callable
 
@@ -401,11 +402,11 @@ def load_saved() -> list[dict]:
         return []
 
 
-def save(results: list[CandidateResult]) -> Path:
+def save(results: list[CandidateResult], versions: dict[str, str | None] | None = None) -> Path:
     """Merge into the saved file: a re-measured (worker, model) replaces its old entry, others are kept."""
     merged = {(r["worker"], r["model"]): r for r in load_saved()}
     for r in results:
-        merged[(r.worker, r.model)] = {**r.to_dict(), "at": utcnow()}
+        merged[(r.worker, r.model)] = {**r.to_dict(), "at": utcnow(), "cli_version": (versions or {}).get(r.worker)}
     p = saved_path()
     p.parent.mkdir(parents=True, exist_ok=True)
     rows = sorted(merged.values(), key=lambda r: (-r["score"], r["avg_seconds"] or 1e9))
@@ -439,3 +440,38 @@ def suggestions(results: list[CandidateResult], min_score: float = 0.5) -> dict:
             chains.setdefault(r.worker, []).append(r.model)
         best.setdefault(r.worker, r)
     return {"model_chains": chains, "quality_order": [w for w, _ in sorted(best.items(), key=lambda kv: (-kv[1].total, kv[1].seconds))]}
+
+
+MAX_AGE_DAYS = 30
+
+
+def stale_messages(infos: dict[str, AgentInfo], rows: list[dict] | None = None, now: datetime | None = None,
+                   max_age_days: int = MAX_AGE_DAYS) -> list[str]:
+    """One line per installed worker whose saved scores are old, were measured on another CLI version, or used fewer
+    tasks than the current benchmark. A worker with no saved scores at all gets a hint too."""
+    rows = load_saved() if rows is None else rows
+    now = now or datetime.now(timezone.utc)
+    out: list[str] = []
+    for name, info in sorted(infos.items()):
+        if not info.ready or name in SKIP:
+            continue
+        mine = [r for r in rows if r.get("worker") == name]
+        if not mine:
+            out.append(f"{name}: no benchmark scores (agentmesh benchmark --workers {name} --yes)")
+            continue
+        why: list[str] = []
+        try:
+            newest = max(datetime.fromisoformat(r["at"]) for r in mine if r.get("at"))
+            age = (now - newest).days
+            if age > max_age_days:
+                why.append(f"measured {age} days ago")
+        except (ValueError, KeyError):
+            why.append("measurement date unknown")
+        seen = {r.get("cli_version") for r in mine if r.get("cli_version")}
+        if info.version and seen and info.version not in seen:
+            why.append(f"CLI is now {info.version}, scored on {', '.join(sorted(seen))}")
+        if any(len(r.get("tasks", [])) < len(TASKS) for r in mine):
+            why.append(f"scored on fewer than the current {len(TASKS)} tasks")
+        if why:
+            out.append(f"{name}: scores may be outdated ({'; '.join(why)}); re-run `agentmesh benchmark --workers {name} --yes`")
+    return out

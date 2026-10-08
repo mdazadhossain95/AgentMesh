@@ -93,6 +93,16 @@ def run_doctor(root: Path | None, registry: Registry, report: DiscoveryReport) -
         route.add("strategy", "INFO", f"{cfg.get('routing.strategy')}  fallback={'ENABLED' if cfg.get('fallback.enabled') else 'DISABLED'}")
         sections.append(route)
 
+    from . import benchmark
+    bench = Section("Benchmark")
+    msgs = benchmark.stale_messages(by)
+    for m in msgs:
+        worker, _, detail = m.partition(": ")
+        bench.add(worker, "WARN", detail)
+    if not msgs:
+        bench.add("saved scores", "READY", "fresh for all ready workers")
+    sections.append(bench)
+
     git = Section("Git")
     gr = gitutil.repo_root(root or Path.cwd())
     if gr is None:
