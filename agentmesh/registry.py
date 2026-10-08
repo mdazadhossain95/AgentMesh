@@ -8,8 +8,8 @@ from .adapters import BUILTIN_ADAPTERS, AgentAdapter, GenericAdapter, MockAdapte
 from .config import load_custom_agents
 from .errors import AgentMeshError
 
-ALIASES = {"agy": "antigravity", "cmd": "command-code", "claude-code": "claude", "kilocode": "kilo",
-           "commandcode": "command-code", "kiro-cli": "kiro"}
+ALIASES = {"agy": "antigravity", "claude-code": "claude", "kilocode": "kilo",
+           "kiro-cli": "kiro"}
 
 
 class Registry:

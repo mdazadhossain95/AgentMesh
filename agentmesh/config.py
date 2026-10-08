@@ -17,7 +17,7 @@ SCHEMA_VERSION = 1
 # Keys regenerated on every `init`; everything else is human-owned and preserved.
 MACHINE_KEYS = ("schema", "project", "detected", "roles", "verification")
 
-DEFAULT_QUALITY_ORDER = ["claude", "codex", "antigravity", "qwen", "opencode", "command-code", "cline", "kiro", "copilot", "kilo"]
+DEFAULT_QUALITY_ORDER = ["claude", "codex", "antigravity", "opencode", "cline", "kiro", "copilot", "kilo"]
 
 DEFAULTS: dict[str, Any] = {
     "manager": {"default": "claude", "bootstrap_files": ["CLAUDE.md", "AGENTS.md"]},
@@ -52,7 +52,7 @@ DEFAULTS: dict[str, Any] = {
     "worktree": {"enabled": True, "dir": ".agentmesh-worktrees", "auto_commit": True},
     "enforcement": {                       # makes the manager follow the loop (Claude Code hooks; `audit` for any CLI)
         "mode": "block",                   # block | warn | off
-        "allow_paths": [".agentmesh/**", ".claude/**", ".gitignore", "CLAUDE.md", "AGENTS.md", "QWEN.md", "**/*.md", "docs/**"],
+        "allow_paths": [".agentmesh/**", ".claude/**", ".gitignore", "CLAUDE.md", "AGENTS.md", "**/*.md", "docs/**"],
         "stop_check": True,                # Stop hook refuses to finish while recent tasks are unverified
         "stop_window_hours": 12,
         "claude_hooks": True,              # init writes .claude/settings.json

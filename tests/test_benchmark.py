@@ -79,12 +79,12 @@ def _r(worker, model, scores, secs=10.0, err=None):
 
 def test_ranking_and_suggestions():
     rs = [_r("kilo", "m-slow", [1, 1, 1, 1], 50), _r("kilo", "m-fast", [1, 1, 1, 1], 5), _r("kilo", "m-bad", [0, 0, 0, 0]),
-          _r("kiro", "k1", [1, 0, 1, 0]), _r("claude", None, [1, 1, 1, 0]), _r("qwen", None, [0, 0], 0, "AUTH_FAILED")]
+          _r("kiro", "k1", [1, 0, 1, 0]), _r("claude", None, [1, 1, 1, 0]), _r("oc", None, [0, 0], 0, "AUTH_FAILED")]
     order = [(r.worker, r.model) for r in ranked(rs)]
     assert order[:2] == [("kilo", "m-fast"), ("kilo", "m-slow")]
     sug = suggestions(rs)
     assert sug["model_chains"] == {"kilo": ["m-fast", "m-slow"], "kiro": ["k1"]}          # bad model dropped
-    assert sug["quality_order"] == ["kilo", "claude", "kiro"] and "qwen" not in sug["quality_order"]
+    assert sug["quality_order"] == ["kilo", "claude", "kiro"] and "oc" not in sug["quality_order"]
 
 
 def test_candidates_skip_unusable_and_expand_model_lists():

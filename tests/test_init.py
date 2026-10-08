@@ -160,10 +160,10 @@ def test_reference_is_indexed_not_copied(flutter_only, tmp_path):
     assert ProjectConfig.load(flutter_only).get("references") == [str(ref)]
 
 
-def test_manager_choice_adds_its_instruction_file(flutter_only):
-    init_with(flutter_only, REG(), manager="qwen")
-    assert bootstrap.BEGIN in (flutter_only / "QWEN.md").read_text()
-    assert ProjectConfig.load(flutter_only).get("manager.default") == "qwen"
+def test_manager_choice_is_recorded_and_gets_instructions(flutter_only):
+    init_with(flutter_only, REG(), manager="codex")
+    assert bootstrap.BEGIN in (flutter_only / "AGENTS.md").read_text()
+    assert ProjectConfig.load(flutter_only).get("manager.default") == "codex"
 
 
 def test_no_secrets_written_to_project_files(flutter_backend, monkeypatch):

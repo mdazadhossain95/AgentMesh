@@ -93,7 +93,7 @@ class AgentAdapter(ABC):
     name: str = ""
     display_name: str = ""
     executables: tuple[str, ...] = ()
-    version_args: tuple[str, ...] | None = ("--version",)   # None => do not probe (see command-code)
+    version_args: tuple[str, ...] | None = ("--version",)   # None => do not probe (a CLI whose --version has side effects)
     help_args: tuple[str, ...] = ("--help",)
     headless_help_args: tuple[str, ...] | None = None        # e.g. ("exec", "--help") for subcommand CLIs
     required_flags: tuple[str, ...] = ()                      # must appear in help to call headless "verified"

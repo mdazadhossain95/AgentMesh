@@ -5,7 +5,7 @@ A local orchestration layer for AI coding CLIs.
 You install it once. In any repository you run `agentmesh init --auto`; it analyzes the project and writes a small
 `.agentmesh/` layer: **project roles** (what work exists), a **conditional workflow** (which roles run when), and
 **routing + fallback policy** (which installed CLI does each role right now). Then you open whichever CLI you want
-as **manager** (`claude`, `codex`, `agy`, `qwen`, ...). It reads the generated instructions, delegates roles through
+as **manager** (`claude`, `codex`, `agy`, `kiro`, ...). It reads the generated instructions, delegates roles through
 `agentmesh`, and verifies the results against real git changes.
 
 ```
@@ -14,7 +14,7 @@ USER ──▶ MANAGER (the CLI you launched)
             │  agentmesh plan / delegate / diff / verify / integrate
             ▼
          ROLE (fixed by the project)         WORKER (chosen per run)
-         backend-engineer ─────router────▶   codex ──quota──▶ antigravity ──▶ qwen
+         backend-engineer ─────router────▶   codex ──quota──▶ antigravity ──▶ kiro
 ```
 
 Two layers, never mixed:
@@ -22,7 +22,7 @@ Two layers, never mixed:
 | Layer | Examples | Changes when |
 |---|---|---|
 | **Project agentic layer** — roles | `spec-analyst`, `backend-engineer`, `app-engineer`, `test-executor`, `reviewer` | the *project* changes |
-| **Execution layer** — workers | Claude Code, Codex, Antigravity, Qwen, ... | quota, auth, outages, your preference |
+| **Execution layer** — workers | Claude Code, Codex, Antigravity, Kiro, ... | quota, auth, outages, your preference |
 
 A role never depends on one CLI. When a worker hits quota, a rate limit, an auth failure, a timeout, or is missing,
 AgentMesh normalizes the error and re-runs the *same role, same prompt, same worktree* on the next eligible worker.
@@ -49,9 +49,7 @@ This is an MVP. What is actually verified, as of the last run on the author's ma
 | Claude Code `claude` | 2.1.292 | `-p --output-format json`, `--permission-mode acceptEdits`, prompt on stdin | JSON result parsed |
 | Codex `codex` | 0.160.0 | `exec --cd --sandbox workspace-write --output-last-message` | follow-ups use a fresh prompt (no `resume`) |
 | Antigravity `agy` | 1.3.0 | `--print <prompt> --mode accept-edits --print-timeout` | prompt-as-value form is *inferred* from help; smoke-test it |
-| Qwen Code `qwen` | 0.21.8 | `--prompt` | help shows no approval flag: headless edit approval depends on your Qwen settings; add one via `workers.extra_args.qwen` |
 | OpenCode `opencode` | 1.18.16 | `run --dir` | extra; no edit-only approval flag (`autonomy: full` adds `--auto`) |
-| Command Code `command-code` | 1.65.0 | `--print --permission-mode accept-edits` | version never probed: its `--version` **self-updates the CLI** |
 | Cline `cline` | 3.0.69 | `--cwd --timeout [--yolo]`, prompt positional | headless auto-approves all tools and has no edit-only mode, so cline is **refused unless `autonomy: full` is set explicitly** (falls back to other workers otherwise). Original install was broken (native binary SIGKILLed); `npm i -g cline` fixed it |
 | Kiro `kiro-cli` | 2.24.1 | `chat --no-interactive --trust-tools=fs_read,fs_write` | `autonomy: full` → `--trust-all-tools`; output stays text |
 | GitHub Copilot `copilot` | 1.0.88 | `--prompt=… --silent --no-ask-user`; edit: `--allow-tool=write --deny-tool=shell`; full: `--allow-all-tools` | help calls `--allow-all-tools` required for non-interactive mode, so edit mode may be refused until smoke-tested |
@@ -196,7 +194,7 @@ tested (reference solutions must score 100%, stubs <100%). Results merge into `~
 and `--apply` writes them into an existing project. Limits: 4 easy tasks mostly tie at 100% (speed breaks ties); it measures
 reliability and speed, not hard-problem skill; scores are for one account on one day. Re-run when models or quotas change.
 Last run (2026-10-07): 19 of 30 candidates scored 100% (all Kiro models except minimax-m2.5, claude, copilot, codex, cline,
-7 Kilo free models); antigravity 38%; qwen (login), command-code and Kilo inkling-small (quota) unusable.
+7 Kilo free models); antigravity 38%; Kilo inkling-small (quota) unusable. qwen and command-code were removed (login needed / quota exhausted); restore from git history if wanted.
 
 ## Workflow
 

@@ -720,7 +720,7 @@ def build_parser() -> argparse.ArgumentParser:
     sp = add("init", cmd_init, "analyze the project and generate .agentmesh/")
     sp.add_argument("--auto", action="store_true", help="analyze first; ask only unresolved questions (default behaviour)")
     sp.add_argument("--yes", "-y", action="store_true", help="never prompt; use defaults and record assumptions")
-    sp.add_argument("--manager", help="manager CLI (claude, codex, antigravity, qwen, ...)")
+    sp.add_argument("--manager", help="manager CLI (claude, codex, antigravity, kiro, ...)")
     sp.add_argument("--reference", help="reference folder or git URL for role methodology")
     sp.add_argument("--answer", action="append", metavar="ID=VALUE", help="pre-answer a question (repeatable)")
     sp.add_argument("--security", action="store_true", help="force security-reviewer role")

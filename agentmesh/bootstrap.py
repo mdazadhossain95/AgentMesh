@@ -12,9 +12,8 @@ GI_BEGIN = "# AGENTMESH:BEGIN"
 GI_END = "# AGENTMESH:END"
 
 # Files each manager CLI reads as project instructions. CLAUDE.md and AGENTS.md are the defaults;
-# GEMINI.md / QWEN.md are those CLIs' documented context-file names and are only written when asked.
-MANAGER_FILES = {"claude": "CLAUDE.md", "codex": "AGENTS.md", "opencode": "AGENTS.md",
-                 "qwen": "QWEN.md"}
+# Only CLAUDE.md and AGENTS.md are written; add other CLIs' context-file names here once their adapter exists.
+MANAGER_FILES = {"claude": "CLAUDE.md", "codex": "AGENTS.md", "opencode": "AGENTS.md"}
 
 
 def _template(rel: str) -> str:

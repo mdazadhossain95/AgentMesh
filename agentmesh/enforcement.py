@@ -22,7 +22,7 @@ from .scope import matches
 from .task_manager import TaskManager
 
 HOOK_PREFIX = "agentmesh hook"
-DEFAULT_ALLOW = [".agentmesh/**", ".claude/**", ".gitignore", "CLAUDE.md", "AGENTS.md", "QWEN.md", "**/*.md", "docs/**"]
+DEFAULT_ALLOW = [".agentmesh/**", ".claude/**", ".gitignore", "CLAUDE.md", "AGENTS.md", "**/*.md", "docs/**"]
 EDIT_TOOLS = "Edit|Write|MultiEdit|NotebookEdit"
 
 

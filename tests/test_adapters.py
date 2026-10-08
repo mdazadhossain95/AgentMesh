@@ -4,8 +4,8 @@ from pathlib import Path
 import pytest
 
 from conftest import make_script
-from agentmesh.adapters import (AntigravityAdapter, ClaudeAdapter, CodexAdapter, CommandCodeAdapter, FreebuffAdapter,
-                                GenericAdapter, ClineAdapter, KiroAdapter, CopilotAdapter, KiloAdapter, OpenCodeAdapter, QwenAdapter)
+from agentmesh.adapters import (AntigravityAdapter, ClaudeAdapter, CodexAdapter, FreebuffAdapter,
+                                GenericAdapter, ClineAdapter, KiroAdapter, CopilotAdapter, KiloAdapter, OpenCodeAdapter)
 from agentmesh.adapters.base import RawResult, RunContext, parse_flags
 from agentmesh.errors import ErrorCode, UnsupportedError, classify_text
 from agentmesh.models import AgentInfo, Task
@@ -53,7 +53,7 @@ def test_adapter_classification_rules(tmp_path):
 
 
 def test_prose_in_stdout_head_does_not_cause_false_auth_failure():
-    a = QwenAdapter()
+    a = KiroAdapter()
     raw = RawResult(1, stdout="Implemented login. " + "x" * 5000 + " tests failed: expected 3 got 4", stderr="")
     assert a.classify_error(raw, a.normalize_result(raw)) == ErrorCode.WORKER_FAILED
 
@@ -97,8 +97,6 @@ def test_codex_command(tmp_path):
 def test_other_adapters_build(tmp_path):
     cases = [
         (AntigravityAdapter(), info("--print", "--mode", "--print-timeout"), ["--mode", "accept-edits", "--print-timeout", "1800s", "--print", "PROMPT"]),
-        (QwenAdapter(), info("--prompt"), ["--prompt", "PROMPT"]),
-        (CommandCodeAdapter(), info("--print", "--permission-mode"), ["--permission-mode", "accept-edits", "--print", "PROMPT"]),
                 (KiroAdapter(), info("--no-interactive", "--trust-tools", "--trust-all-tools"),
          ["chat", "--no-interactive", "--trust-tools=fs_read,fs_write", "PROMPT"]),
         (CopilotAdapter(), info("--prompt", "--allow-tool", "--deny-tool", "--no-ask-user", "--silent"),
@@ -110,8 +108,8 @@ def test_other_adapters_build(tmp_path):
 
 
 def test_extra_args_and_model_pass_through(tmp_path):
-    spec = QwenAdapter().build_command(ctx(tmp_path, extra_args=["--yolo"], model="m1"), info("--prompt", "--model"))
-    assert spec.argv[1:] == ["--model", "m1", "--yolo", "--prompt", "PROMPT"]
+    spec = KiroAdapter().build_command(ctx(tmp_path, extra_args=["--verbose"], model="m1"), info("--no-interactive", "--model"))
+    assert spec.argv[1:] == ["chat", "--no-interactive", "--model", "m1", "--verbose", "PROMPT"]
 
 
 def test_interactive_and_unconfigured_adapters_refuse(tmp_path):

@@ -49,11 +49,19 @@ def test_kilo_is_ready_only_when_run_help_documents_dir(tmp_path):
     assert run(tmp_path).by_name()["kilo"].state == "UNVERIFIED"
 
 
-def test_command_code_version_is_never_executed(tmp_path):
+def test_version_is_never_executed_when_the_adapter_opts_out(tmp_path):
+    from agentmesh.adapters import ClaudeAdapter
+    from agentmesh.registry import Registry
+
+    class NoVersion(ClaudeAdapter):
+        name, executables, version_args = "nv", ("nv",), None
+
     marker = tmp_path / "ran-version"
-    make_script(tmp_path / "bin", "command-code",
-                f'case "$1" in --version) touch {marker}; echo 1;; --help) echo "  -p, --print"; echo "  --permission-mode";; esac')
-    a = run(tmp_path).by_name()["command-code"]
+    make_script(tmp_path / "bin", "nv",
+                f'case "$1" in --version) touch {marker}; echo 1;; --help) echo "  -p, --print"; echo "  --output-format";; esac')
+    reg = Registry()
+    reg.register(NoVersion())
+    a = discovery.discover(reg, path_env=f"{tmp_path/'bin'}:/usr/bin:/bin").by_name()["nv"]
     assert a.state == "READY" and a.version is None and not marker.exists()
 
 
