@@ -1,6 +1,6 @@
 from pathlib import Path
 
-from conftest import make_script
+from conftest import make_script, restricted_path
 from agentmesh import discovery
 from agentmesh.registry import build_registry
 
@@ -12,7 +12,7 @@ def claude_script(bindir):
 
 
 def run(tmp_path, **kw):
-    return discovery.discover(build_registry(custom={}, mock_env=False), path_env=f"{tmp_path/'bin'}:/usr/bin:/bin", **kw)
+    return discovery.discover(build_registry(custom={}, mock_env=False), path_env=restricted_path(tmp_path/'bin'), **kw)
 
 
 def test_nothing_installed_marks_everything_not_installed(tmp_path):
@@ -61,7 +61,7 @@ def test_version_is_never_executed_when_the_adapter_opts_out(tmp_path):
                 f'case "$1" in --version) touch {marker}; echo 1;; --help) echo "  -p, --print"; echo "  --output-format";; esac')
     reg = Registry()
     reg.register(NoVersion())
-    a = discovery.discover(reg, path_env=f"{tmp_path/'bin'}:/usr/bin:/bin").by_name()["nv"]
+    a = discovery.discover(reg, path_env=restricted_path(tmp_path/'bin')).by_name()["nv"]
     assert a.state == "READY" and a.version is None and not marker.exists()
 
 

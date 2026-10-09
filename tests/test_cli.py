@@ -2,7 +2,7 @@ import json
 
 import pytest
 
-from conftest import commit_all, git, make_script, write
+from conftest import commit_all, git, make_script, write, restricted_path
 from agentmesh import __version__
 from agentmesh.cli import main
 
@@ -10,7 +10,7 @@ from agentmesh.cli import main
 @pytest.fixture
 def project(flutter_only, monkeypatch, tmp_path):
     """Initialized project whose only workers are mocks (PATH has no real CLIs)."""
-    monkeypatch.setenv("PATH", f"{tmp_path/'nobin'}:/usr/bin:/bin")
+    monkeypatch.setenv("PATH", restricted_path(tmp_path/'nobin'))
     monkeypatch.setenv("AGENTMESH_MOCK", "m1:QUOTA_EXCEEDED,m2:SUCCESS,m3:SUCCESS")
     monkeypatch.setenv("AGENTMESH_MOCK_WRITE", "lib/features/profile.dart")
     monkeypatch.chdir(flutter_only)
@@ -45,7 +45,7 @@ def test_commands_outside_project_fail_clearly(tmp_path, monkeypatch, capsys):
 
 def test_discover_and_agents_json(capsys, monkeypatch, tmp_path):
     make_script(tmp_path / "bin", "claude", 'case "$1" in --version) echo 1.2.3;; --help) echo "  -p, --print"; echo "  --output-format";; esac')
-    monkeypatch.setenv("PATH", f"{tmp_path/'bin'}:/usr/bin:/bin")
+    monkeypatch.setenv("PATH", restricted_path(tmp_path/'bin'))
     monkeypatch.chdir(tmp_path)
     code, out, _ = run(capsys, "discover", "--json")
     data = json.loads(out)
@@ -167,7 +167,7 @@ def test_configure_refuses_machine_keys(project, capsys):
 
 def test_configure_add_agent_registers_generic_cli(capsys, home, tmp_path, monkeypatch):
     exe = make_script(tmp_path / "bin", "mytool", 'case "$1" in --version) echo 3.1;; esac')
-    monkeypatch.setenv("PATH", f"{tmp_path/'bin'}:/usr/bin:/bin")
+    monkeypatch.setenv("PATH", restricted_path(tmp_path/'bin'))
     monkeypatch.chdir(tmp_path)
     code, out, _ = run(capsys, "configure", "add-agent", "mytool", "--executable", "mytool", "--headless-arg=--go", "--headless-arg={prompt}")
     assert code == 0
@@ -198,7 +198,7 @@ def test_smoke_requires_explicit_consent(project, capsys):
 
 def test_launch_validates_then_execs_manager(project, capsys, monkeypatch, tmp_path):
     make_script(tmp_path / "bin", "claude", 'case "$1" in --version) echo 1.0;; --help) echo "  -p, --print"; echo "  --output-format";; esac')
-    monkeypatch.setenv("PATH", f"{tmp_path/'bin'}:/usr/bin:/bin")
+    monkeypatch.setenv("PATH", restricted_path(tmp_path/'bin'))
     seen = {}
     monkeypatch.setattr("os.execvpe", lambda path, argv, env: seen.update(path=path, argv=argv, env=env))
     code, out, _ = run(capsys, "launch", "claude", "--", "--resume")

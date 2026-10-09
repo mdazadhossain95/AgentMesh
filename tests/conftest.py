@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import os
+import shutil
 import stat
 import subprocess
 from pathlib import Path
@@ -19,6 +20,18 @@ def git(cwd: Path, *args: str) -> str:
 def commit_all(root: Path, msg: str = "c") -> None:
     git(root, "add", "-A")
     git(root, "commit", "-qm", msg)
+
+
+def _system_dirs() -> list[str]:
+    if os.name != "nt":
+        return ["/usr/bin", "/bin"]
+    git = shutil.which("git")
+    return [d for d in (os.path.dirname(git) if git else "", os.path.join(os.environ.get("SYSTEMROOT", r"C:\Windows"), "System32")) if d]
+
+
+def restricted_path(first) -> str:
+    """PATH with `first` ahead of only the system dirs (and git): hides real coding CLIs from discovery."""
+    return os.pathsep.join([str(first), *_system_dirs()])
 
 
 def make_script(bindir: Path, name: str, body: str) -> Path:

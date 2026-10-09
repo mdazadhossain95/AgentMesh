@@ -2,7 +2,7 @@ import json
 
 import pytest
 
-from conftest import commit_all, write
+from conftest import commit_all, write, restricted_path
 from helpers import init_with, make_runner, mock_registry, new_task
 from agentmesh import risk
 from agentmesh.cli import main
@@ -64,7 +64,7 @@ def test_review_mode_never_and_always(flutter_only):
 
 
 def test_cli_plan_reports_risk(flutter_only, monkeypatch, capsys, tmp_path):
-    monkeypatch.setenv("PATH", f"{tmp_path/'nobin'}:/usr/bin:/bin")
+    monkeypatch.setenv("PATH", restricted_path(tmp_path/'nobin'))
     monkeypatch.setenv("AGENTMESH_MOCK", "m1:SUCCESS,m2:SUCCESS")
     monkeypatch.chdir(flutter_only)
     main(["init", "--auto", "--yes"]); capsys.readouterr()
@@ -122,7 +122,7 @@ def test_require_different_worker_can_be_turned_off(flutter_only):
 # ---- verify / integrate gating (CLI) ----
 @pytest.fixture
 def proj(flutter_only, monkeypatch, capsys, tmp_path):
-    monkeypatch.setenv("PATH", f"{tmp_path/'nobin'}:/usr/bin:/bin")
+    monkeypatch.setenv("PATH", restricted_path(tmp_path/'nobin'))
     monkeypatch.setenv("AGENTMESH_MOCK", "m1:SUCCESS,m2:SUCCESS")
     monkeypatch.setenv("AGENTMESH_MOCK_WRITE", "lib/f.dart")
     monkeypatch.chdir(flutter_only)

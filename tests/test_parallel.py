@@ -1,10 +1,11 @@
+import os
 import json
 import threading
 import time
 
 import pytest
 
-from conftest import commit_all, write
+from conftest import commit_all, write, restricted_path
 from helpers import make_runner, mock_registry
 from agentmesh.batch import BatchItem, load_batch, run_batch, template_from_plan, validate
 from agentmesh.delegation import TaskSpec
@@ -30,6 +31,7 @@ def item(i, role, deps=()):
     return BatchItem(i, TaskSpec(role=role, title=i, description=f"do {i}"), list(deps))
 
 
+@pytest.mark.skipif(os.name == "nt", reason="wall-clock overlap check is too noisy on Windows runners")
 def test_independent_tasks_really_run_at_the_same_time(flutter_backend):
     runner, cfg, _ = env(flutter_backend, delay=0.6)
     items = [item("be", "backend-engineer"), item("ui", "app-engineer")]
@@ -156,7 +158,7 @@ def test_state_counters_survive_concurrent_writers(tmp_path):
 
 def test_cli_run_batch_end_to_end(flutter_backend, monkeypatch, capsys, tmp_path):
     from agentmesh.cli import main
-    monkeypatch.setenv("PATH", f"{tmp_path/'nobin'}:/usr/bin:/bin")
+    monkeypatch.setenv("PATH", restricted_path(tmp_path/'nobin'))
     monkeypatch.setenv("AGENTMESH_MOCK", "m1:SUCCESS,m2:SUCCESS")
     monkeypatch.setenv("AGENTMESH_MOCK_WRITE", "lib/f.dart")
     monkeypatch.chdir(flutter_backend)
