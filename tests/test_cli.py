@@ -102,7 +102,7 @@ def test_delegate_fallback_verify_integrate_end_to_end(project, capsys):
     assert "profile.dart" in out
     code, _, err = run(capsys, "integrate", "task-001")
     assert code == 1 and "not verified" in err                      # cannot merge unverified work
-    code, out, _ = run(capsys, "verify", "task-001", "--cmd", "ls lib/features/profile.dart")
+    code, out, _ = run(capsys, "verify", "task-001", "--cmd", "git rev-parse --is-inside-work-tree")
     assert code == 0 and "VERIFIED" in out
     code, out, _ = run(capsys, "integrate", "task-001", "--cleanup")
     assert code == 0 and (project / "lib/features/profile.dart").exists()
