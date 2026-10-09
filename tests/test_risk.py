@@ -164,3 +164,57 @@ def test_review_never_skips_the_integrate_gate(proj, capsys):
     main(["configure", "set", "review.mode", "never"])
     capsys.readouterr()
     assert main(["integrate", "task-001"]) == 0
+
+
+# ---- review-found regressions ----
+def test_non_writing_tasks_are_not_authors(flutter_only):
+    reg = mock_registry({"w1": "SUCCESS", "w2": "SUCCESS"}, w1={"writes": {}}, w2={"writes": WRITE})
+    runner, cfg = make_runner(flutter_only, reg, {"routing": {"strategy": "preferred-order", "preferred_order": ["w1", "w2"]}})
+    spec = runner.run(new_task(cfg, "spec-analyst", isolation="inplace"))        # w1, writes nothing
+    assert spec.worker == "w1" and spec.changed_files == []
+    reg.get("w1").writes = WRITE
+    impl = runner.run(new_task(cfg, risk="high"))
+    rev = new_task(cfg, "reviewer", reuse_worktree_of=impl.task_id, context_tasks=[spec.task_id], risk="high")
+    assert runner.authors_of(rev) == {impl.worker}
+
+
+def test_reviewer_risk_cannot_be_lowered_below_the_work(flutter_only):
+    runner, cfg = make_runner(flutter_only, mock_registry({"w1": "SUCCESS"}), PREF)
+    tm = TaskManager(cfg.paths)
+    impl = build_task(cfg, tm, TaskSpec(role="app-engineer", title="Add JWT login"))
+    rev = build_task(cfg, tm, TaskSpec(role="reviewer", title="r", reuse_worktree=impl.task_id, inplace=True, risk="low"))
+    assert rev.risk == "high"
+
+
+def test_path_escalation_makes_review_strict(flutter_only):
+    reg = mock_registry({"w1": "SUCCESS"}, w1={"writes": {"lib/auth/login.dart": "x"}})
+    runner, cfg = make_runner(flutter_only, reg, PREF)
+    impl = runner.run(new_task(cfg, risk="normal"))          # text said normal, files say auth
+    reg.get("w1").writes = {}
+    rev = runner.run(new_task(cfg, "reviewer", reuse_worktree_of=impl.task_id, risk="normal"))
+    assert rev.status == "FAILED" and rev.normalized_error == "NO_WORKER_AVAILABLE"
+
+
+def test_invalid_risk_is_rejected_without_leaving_a_task_record(flutter_only):
+    runner, cfg = make_runner(flutter_only, mock_registry({"w1": "SUCCESS"}), PREF)
+    tm = TaskManager(cfg.paths)
+    with pytest.raises(Exception, match="risk must be one of"):
+        build_task(cfg, tm, TaskSpec(role="app-engineer", title="x", risk="HIGH"))
+    with pytest.raises(Exception):
+        build_task(cfg, tm, TaskSpec(role="reviewer", title="x", reuse_worktree="task-999"))
+    assert list(cfg.paths.tasks_dir.glob("task-*.json")) == []
+    assert risk.higher("bogus", "low") == "bogus" and risk.higher("low", "bogus") == "bogus"      # unknown counts as normal
+
+
+def test_requirements_txt_is_not_a_docs_only_change():
+    assert risk.assess("Fix typo", ["requirements.txt"]).tier == "normal"
+    assert risk.assess("Fix typo", ["README.md", "docs/a.md"]).tier == "low"
+
+
+def test_review_before_a_later_correction_does_not_count(proj, capsys):
+    main(["delegate", "--role", "app-engineer", "--title", "Add JWT login", "--description", "x"])
+    main(["verify", "task-001", "--accept", "manual"])
+    main(["delegate", "--role", "reviewer", "--title", "review", "--description", "r", "--reuse-worktree", "task-001"])
+    main(["delegate", "--continue", "task-001", "--message", "fix"])
+    capsys.readouterr()
+    assert main(["integrate", "task-001"]) != 0 and "high risk" in capsys.readouterr().err

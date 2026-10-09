@@ -12,7 +12,7 @@ HIGH_TEXT = ("security", "financial", "api", "backend")
 HIGH_WORDS = ("migration", "database", "schema", "drop table", "delete data", "production", "deploy")
 HIGH_PATHS = ["**/auth/**", "**/*auth*", "**/api/**", "**/migrations/**", "**/*.sql", "**/payment*/**", "**/billing/**",
               "**/security/**", "**/db/**", "**/database/**", "**/backend/**", "**/server/**", *CONTRACT_GLOBS]
-LOW_PATHS = ["**/*.md", "**/*.txt", "**/*.rst", "docs/**", "LICENSE", "**/LICENSE", ".gitignore", ".editorconfig"]
+LOW_PATHS = ["**/*.md", "**/*.rst", "docs/**", "LICENSE*", "**/LICENSE*", ".gitignore", ".editorconfig"]   # not *.txt: requirements.txt etc. are build inputs
 
 
 @dataclass
@@ -64,5 +64,9 @@ def assess(text: str, files: list[str] | None = None, *, override: str | None = 
     return Risk("normal", why or ["no high-risk signal"])
 
 
+def _rank(t: str) -> int:
+    return TIERS.index(t) if t in TIERS else TIERS.index("normal")      # unknown stored tier counts as normal
+
+
 def higher(a: str, b: str) -> str:
-    return a if TIERS.index(a) >= TIERS.index(b) else b
+    return a if _rank(a) >= _rank(b) else b

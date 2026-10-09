@@ -6,8 +6,9 @@ from dataclasses import dataclass, field
 from .config import ProjectConfig
 from .errors import AgentMeshError
 from .models import Task
-from .risk import Risk, assess, higher
+from .risk import TIERS, Risk, assess, higher
 from .roles import GLOBAL_FORBIDDEN
+from .workflow import REVIEW_ROLES
 from .task_manager import TaskManager
 
 
@@ -55,6 +56,11 @@ def build_task(cfg: ProjectConfig, tm: TaskManager, spec: TaskSpec) -> Task:
     read_only = policy.get("capability") == "read-only"
     title = spec.title or (spec.description.strip().splitlines()[0][:80] if spec.description.strip() else spec.role)
     stacked = bool(spec.base_tasks)
+    if spec.risk and spec.risk not in TIERS:
+        raise AgentMeshError(f"risk must be one of {', '.join(TIERS)} (got '{spec.risk}')")
+    own = spec.risk or risk_for(cfg, spec).tier
+    inherited = inherited_risk(tm, spec, own)       # before next_id(): a bad task id must not leave an empty record behind
+    tier = higher(own, inherited) if spec.role in REVIEW_ROLES else (spec.risk or inherited)
     task = Task(
         task_id=tm.next_id(), title=title, role=spec.role, description=spec.description,
         capability=policy.get("capability", "write"), requirements=spec.requirements, constraints=spec.constraints,
@@ -67,6 +73,6 @@ def build_task(cfg: ProjectConfig, tm: TaskManager, spec: TaskSpec) -> Task:
         isolation="inplace" if (spec.inplace or (read_only and not spec.reuse_worktree and not stacked))
         else policy.get("isolation", "worktree"),
         timeout_seconds=spec.timeout or int(cfg.get("workers.timeout_seconds", 1800)),
-        risk=spec.risk or inherited_risk(tm, spec, risk_for(cfg, spec).tier))
+        risk=tier)
     tm.save(task)
     return task

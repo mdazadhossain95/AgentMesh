@@ -99,8 +99,8 @@ diff, runs `agentmesh verify`, sends focused corrections with `delegate --contin
 | `analyze [--json]` | Show what init would detect; writes nothing |
 | `init [--auto] [--yes] [--manager X] [--reference PATH\|URL] [--answer id=val] [--security\|--no-security] [--dry-run]` | Generate/refresh `.agentmesh/` and manager bootstrap |
 | `doctor [--json]` | Config, roles, workflow, workers, routing depth, git, hygiene. No model calls |
-| `plan "<request>" [--json]` | Map a request to workflow stages/roles (+ worker preview) |
-| `delegate --role R ...` | Run one role as a task on a routed worker, in a git worktree, with fallback |
+| `plan "<request>" [--json] [--risk low\|normal\|high]` | Map a request to workflow stages/roles (+ risk tier, worker preview) |
+| `delegate --role R ... [--risk T]` | Run one role as a task on a routed worker, in a git worktree, with fallback |
 | `delegate --base-task T1 [--base-task T2]` | Build on earlier tasks' work (stacked) or test/review several together |
 | `audit [--json]` | List direct product-code changes in the main tree (works for any manager CLI) |
 | `abandon TASK` | Drop a task so it no longer blocks finishing |
@@ -115,6 +115,7 @@ diff, runs `agentmesh verify`, sends focused corrections with `delegate --contin
 | `launch [CLI] [-- args]` | Validate config, print status, start the manager CLI |
 | `configure show\|get\|set\|add-agent` | Edit human-owned config; register a generic CLI |
 | `clean [--worktrees] [--state] [--all] [--task T] --yes` | Remove worktrees/runtime state (never task/report records) |
+| `benchmark --quick --yes` | **Live**, cheap: 2 easy tasks on each CLI's default model. Says "it works", never ranks, never replaces a full score |
 | `smoke WORKER --yes` | **Live**, may cost quota: one tiny prompt to confirm the invocation works |
 
 Exit codes: `0` ok · `1` error · `3` task FAILED · `4` task SCOPE_VIOLATION.
@@ -184,11 +185,37 @@ Instructions alone can be ignored, so `init` also installs enforcement:
   env `AGENTMESH_ENFORCE=off` for one session. Limits: the hook sees edit tools, not shell edits (`sed -i`, redirects); `audit` catches those afterwards.
   The hook command is `agentmesh hook …`, so `agentmesh` must be on PATH or the hook silently does nothing.
 
+## Risk tiers and review
+
+Every task gets a tier from its text and, later, the files it really changed (`--risk` overrides; extra globs via
+`risk.high_paths` / `risk.low_paths` in project.yaml).
+
+| Tier | Triggers | Plan | Verify | Integrate |
+|---|---|---|---|---|
+| low | trivial wording, or only docs/text files touched | implementer + manager check | docs/text-only diff + clean scope = verified by diff check; code changes still run the commands | verified |
+| normal | everything else | spec if needed, implement, test, review | project verification commands | verified |
+| high | auth, API, backend, DB/migrations, payments, contracts | adds spec and every specialist review | project verification commands | verified **and a successful reviewer task** (or `--force`) |
+
+Text can understate risk, so `verify`/`integrate` also re-check the changed files: touching an auth/API/migration path
+makes the task high even if the title said "typo". Test and review tasks inherit the tier of the work they check.
+
+`review.mode`: `auto` (tier decides, default) | `always` | `never`. A reviewer is kept off the worker that wrote the code
+(`review.require_different_worker`, default true): for normal risk it is a preference (the summary gets a NOTE if the same
+worker had to review); for high risk it is a rule (no other worker available = the review task fails with NO_WORKER_AVAILABLE).
+
+## Token saving
+
+`init` and `doctor` report, per project, which token-saving tools fit (`economy.mode: auto|off`): RTK (shell-heavy: has
+verification commands), caveman (manager sessions run long), CodeGraph (repo of 300+ files; AgentMesh never runs
+`codegraph init` itself, indexing is your call), ponytail (suggest only). RTK and caveman are global tools, so AgentMesh
+only checks and reports. The manager section also gets short "Token economy" rules (terse replies, diff `--stat` first,
+cheap checks always, expensive ones on request). These tools' savings numbers are mostly self-reported; do not read them as billed savings.
+
 ## Benchmark: which model is actually best
 
 `agentmesh benchmark --yes` (**live, spends quota/credits**) gives every ready CLI, and every model in the model lists
-(`--wide`: every model the CLIs report), the same 4 small coding tasks in a fresh temp dir (slugify, LRU cache, interval-merge
-bug fix, duration parser with edge cases). Hidden unit tests the worker never sees score the result; the harness itself is
+(`--wide`: every model the CLIs report), the same 7 small coding tasks in a fresh temp dir (slugify, LRU cache, interval-merge
+bug fix, duration parser, expression parser, bucket bug fix, toposort). Hidden unit tests the worker never sees score the result; the harness itself is
 tested (reference solutions must score 100%, stubs <100%). Results merge into `~/.agentmesh/benchmark.json`.
 `init` then orders `workers.models.*` and `routing.quality_order` from these measurements (falling back to the static lists),
 and `--apply` writes them into an existing project. Limits: 4 easy tasks mostly tie at 100% (speed breaks ties); it measures

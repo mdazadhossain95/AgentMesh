@@ -135,8 +135,9 @@ class Runner:
 
         bench_rows = load_saved()
         worker_attempts = 0
-        authors = self.authors_of(task) if task.role in REVIEW_ROLES and self._needs_other_worker() else set()
-        strict = bool(authors) and task.risk == "high"
+        authors_changed: list[str] = []
+        authors = self.authors_of(task, authors_changed) if task.role in REVIEW_ROLES and self._needs_other_worker() else set()
+        strict = bool(authors) and self._review_tier(task, authors_changed) == "high"
         while worker_attempts < max_attempts:
             ranking = self.router.rank(task.role, exclude=tried, preferred=task.preferred_worker,
                                        avoid=set(task.avoid_workers) | authors, strict_avoid=strict)
@@ -251,8 +252,17 @@ class Runner:
     def _needs_other_worker(self) -> bool:
         return bool(self.config.get("review.require_different_worker", True))
 
-    def authors_of(self, task: Task) -> set[str]:
-        """Workers that produced the code a review task looks at (via reuse/base/context tasks, transitively)."""
+    def _review_tier(self, task: Task, changed: list[str]) -> str:
+        """Stored tier, raised by the files the reviewed work really changed (same rule as `integrate`)."""
+        from .risk import assess, higher
+        found = assess("", changed, high_paths=self.config.get("risk.high_paths", []),
+                       low_paths=self.config.get("risk.low_paths", []))
+        return higher(task.risk, "high" if found.tier == "high" else task.risk)
+
+    def authors_of(self, task: Task, changed: list[str] | None = None) -> set[str]:
+        """Workers that wrote the code a review task looks at (via reuse/base/context tasks, transitively).
+        Only tasks that changed files count: a spec or test run that wrote nothing is not an author.
+        `changed` (if given) collects those files."""
         out: set[str] = set()
         seen: set[str] = set()
         todo = [*([task.reuse_worktree_of] if task.reuse_worktree_of else []), *task.base_tasks, *task.context_tasks]
@@ -267,8 +277,10 @@ class Runner:
                 continue
             if t.role not in REVIEW_ROLES:
                 r = self.tasks.load_result(tid)
-                if r and r.worker:
-                    out.add(r.worker)
+                if r and r.changed_files:
+                    out |= {a.worker for a in r.attempts} | ({r.worker} if r.worker else set())
+                    if changed is not None:
+                        changed.extend(r.changed_files)
             todo += [*([t.reuse_worktree_of] if t.reuse_worktree_of else []), *t.base_tasks, *t.context_tasks]
         return out
 
