@@ -94,19 +94,32 @@ Auth state is always `UNKNOWN` (probing it costs a call). Remaining quota is nev
 
 ## Install
 
-Requires Python ≥ 3.11 and `git`.
+Requires Python ≥ 3.11 and `git`. Works on macOS, Linux and Windows. No clone needed.
 
 ```bash
-git clone <this repo> ~/AgentMesh && cd ~/AgentMesh
+# 1. get uv once:  macOS/Linux: brew install uv  (or curl -LsSf https://astral.sh/uv/install.sh | sh)
+#                  Windows:     winget install astral-sh.uv   (or: powershell -c "irm https://astral.sh/uv/install.ps1 | iex")
 
-# global command, isolated env (recommended)
-uv tool install -e .          # or: pipx install -e .   /   pipx install .
-# or into the current environment
-pip install -e .
+# 2. install the global command straight from GitHub
+uv tool install git+https://github.com/mdazadhossain95/AgentMesh     # or: pipx install git+https://github.com/mdazadhossain95/AgentMesh
 
 agentmesh --help
 agentmesh discover            # what is on this machine (free)
 ```
+
+Update later: `uv tool upgrade agentmesh`. Try it without installing: `uvx --from git+https://github.com/mdazadhossain95/AgentMesh agentmesh discover`
+(the hooks that `init` writes call plain `agentmesh`, so install it for real use).
+From a clone instead: `git clone https://github.com/mdazadhossain95/AgentMesh && cd AgentMesh && uv tool install -e .`
+
+### Platforms
+
+| OS | Status |
+|---|---|
+| macOS | Tests pass in CI; also used live by the author |
+| Linux | Tests pass in CI |
+| Windows | Tests pass in CI (file locking, process-tree kill, `launch`, UTF-8 output are Windows-aware). **Not yet tried with real coding CLIs on Windows**: npm-installed CLIs run as `.cmd` shims, and very long multi-line prompts passed as arguments may hit Windows quoting limits. Run `agentmesh smoke <worker> --yes` first. WSL behaves like Linux and is the safest route |
+
+CI runs the offline test suite on Ubuntu, macOS and Windows with Python 3.11 and 3.13 (`.github/workflows/ci.yml`).
 
 Dev: `uv venv && uv pip install -e '.[dev]' && .venv/bin/python -m pytest`.
 
