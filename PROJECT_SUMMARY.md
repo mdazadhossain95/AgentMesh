@@ -49,3 +49,7 @@ Not done live: no real worker was called this session (init/plan/doctor were run
 Optional next: re-run kilo/opencode/antigravity benchmarks (stale warnings); cost-aware routing; fallback on failed verify; `agentmesh adopt`; CI + PyPI; run-history report. Open question: Minimi leftover files in ~/Library (user decides).
 
 Token-tool findings (2026-10-09, from web research): ponytail claims are mostly self-reported (JetBrains saw 1/4-1/2 of the advertised savings); caveman saves output tokens only (65% claimed, 15-25% in one blogger's test); codegraph helps big repos, little on small ones; RTK's `gain` counts removed output, not money (a Terminal-Bench cost test found no saving). Updated on the dev machine: rtk 0.51.0 (brew), codegraph 1.6.2 (npm -g), caveman plugin 3.2.0 (restart needed). tokenwar and minimi rejected; Minimi.app moved to Trash.
+
+## Update 2026-10-09 (end of session)
+
+Repo public at github.com/mdazadhossain95/AgentMesh. Cross-platform (Windows locking/kill/launch/UTF-8), CI matrix on Ubuntu/macOS/Windows (py3.11, 3.13) green, README has plain-language intro + install-from-GitHub + platform table. Still unverified: real worker CLIs on Windows/Linux and any live delegate/review run.
