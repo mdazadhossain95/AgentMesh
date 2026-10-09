@@ -44,7 +44,12 @@ Windows (PowerShell):
 ```powershell
 powershell -c "irm https://raw.githubusercontent.com/mdazadhossain95/AgentMesh/main/install.ps1 | iex"
 ```
-It installs `uv` if you don't have it, then AgentMesh. Open a **new terminal** afterwards. Run the same line again to update.
+It installs `uv` if you don't have it (via Homebrew/winget when present, otherwise uv's official installer), then
+AgentMesh. Open a **new terminal** afterwards. Run the same line again to update.
+
+Piping a script into a shell runs whatever it contains, so you can read it first ([install.sh](install.sh),
+[install.ps1](install.ps1)) or skip it and use Way 2. By default it installs the latest `main`; to install a fixed
+version, set `AGENTMESH_REF` (a tag or commit), for example `AGENTMESH_REF=<tag-or-commit> sh install.sh` after downloading the script.
 
 ### Way 2: download it and run from the folder
 
