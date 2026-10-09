@@ -114,6 +114,12 @@ def run_doctor(root: Path | None, registry: Registry, report: DiscoveryReport) -
 
     if cfg is not None:
         sec = Section("Security & hygiene")
+        mgr = cfg.get("manager.default")
+        mf = bootstrap.manager_file(mgr)
+        mp = cfg.paths.root / mf
+        mok = mp.is_file() and bootstrap.BEGIN in mp.read_text(encoding="utf-8")
+        sec.add(f"manager {mgr}", "READY" if mok else "WARN",
+                f"reads {mf}" if mok else f"{mgr} reads {mf} but the AgentMesh section is missing (re-run init)")
         for f in cfg.get("manager.bootstrap_files", []):
             p = cfg.paths.root / f
             ok = p.is_file() and bootstrap.BEGIN in p.read_text(encoding="utf-8")

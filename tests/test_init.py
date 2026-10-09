@@ -171,3 +171,26 @@ def test_no_secrets_written_to_project_files(flutter_backend, monkeypatch):
     init_with(flutter_backend, REG())
     blob = "".join(p.read_text() for p in (flutter_backend / ".agentmesh").rglob("*") if p.is_file())
     assert "sk-should-never" not in blob
+
+
+@pytest.mark.parametrize("cli,expected", [
+    ("claude", "CLAUDE.md"), ("codex", "AGENTS.md"), ("copilot", "AGENTS.md"), ("cline", "AGENTS.md"),
+    ("kilo", "AGENTS.md"), ("kiro", "AGENTS.md"), ("antigravity", "AGENTS.md"), ("unknown-cli", "AGENTS.md")])
+def test_manager_file_per_cli(cli, expected):
+    assert bootstrap.manager_file(cli) == expected
+
+
+def test_doctor_reports_manager_file(flutter_backend):
+    from agentmesh import discovery
+    from agentmesh.health import run_doctor
+    reg = REG()
+    init_with(flutter_backend, reg)
+    sections, _ = run_doctor(flutter_backend, reg, discovery.current(reg))
+    sec = next(s for s in sections if s.title == "Security & hygiene")
+    mgr = next(c for c in sec.checks if c.label.startswith("manager "))
+    assert mgr.status == "READY"
+    (flutter_backend / "AGENTS.md").write_text("x")
+    (flutter_backend / "CLAUDE.md").write_text("x")
+    sections, _ = run_doctor(flutter_backend, reg, discovery.current(reg))
+    mgr = next(c for s in sections for c in s.checks if c.label.startswith("manager "))
+    assert mgr.status == "WARN"

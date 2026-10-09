@@ -142,8 +142,8 @@ def init_project(root: Path, registry: Registry, *, asker: Asker | None = None, 
     if "quality_order" not in (existing.get("routing") or {}) and (order := benchmark.measured_quality_order()):
         human["routing"]["quality_order"] = order       # quality-first strategy follows measured results when they exist
     human["manager"]["default"] = mgr
-    extra = bootstrap.MANAGER_FILES.get(mgr)
-    if extra and extra not in human["manager"]["bootstrap_files"]:
+    extra = bootstrap.manager_file(mgr)
+    if extra not in human["manager"]["bootstrap_files"]:
         human["manager"]["bootstrap_files"] = [*human["manager"]["bootstrap_files"], extra]
     human["references"] = refs
     models = human["workers"].setdefault("models", {})

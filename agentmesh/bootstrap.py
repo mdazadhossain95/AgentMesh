@@ -11,9 +11,18 @@ END = "<!-- AGENTMESH:END -->"
 GI_BEGIN = "# AGENTMESH:BEGIN"
 GI_END = "# AGENTMESH:END"
 
-# Files each manager CLI reads as project instructions. CLAUDE.md and AGENTS.md are the defaults;
-# Only CLAUDE.md and AGENTS.md are written; add other CLIs' context-file names here once their adapter exists.
-MANAGER_FILES = {"claude": "CLAUDE.md", "codex": "AGENTS.md", "opencode": "AGENTS.md"}
+# Instruction file each manager CLI reads. Verified 2026-10-09 by grepping the installed CLIs
+# (copilot, cline, kilo, kiro, agy all reference AGENTS.md; copilot also reads CLAUDE.md).
+# CLIs not listed fall back to AGENTS.md, the cross-tool convention.
+MANAGER_FILES = {
+    "claude": "CLAUDE.md", "codex": "AGENTS.md", "opencode": "AGENTS.md", "copilot": "AGENTS.md",
+    "cline": "AGENTS.md", "kilo": "AGENTS.md", "kiro": "AGENTS.md", "antigravity": "AGENTS.md",
+}
+DEFAULT_MANAGER_FILE = "AGENTS.md"
+
+
+def manager_file(manager: str) -> str:
+    return MANAGER_FILES.get(manager, DEFAULT_MANAGER_FILE)
 
 
 def _template(rel: str) -> str:
