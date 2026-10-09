@@ -22,6 +22,8 @@ def commit_all(root: Path, msg: str = "c") -> None:
 
 
 def make_script(bindir: Path, name: str, body: str) -> Path:
+    if os.name == "nt":
+        pytest.skip("shell-script fake CLIs need a POSIX shell")
     bindir.mkdir(parents=True, exist_ok=True)
     p = bindir / name
     p.write_text("#!/bin/sh\n" + body + "\n")

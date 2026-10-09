@@ -322,7 +322,8 @@ def evaluate(workdir: Path, task: BenchTask) -> float:
     (workdir / "test_hidden.py").write_text(task.hidden, encoding="utf-8")
     try:
         r = subprocess.run([sys.executable, "-c", _HARNESS], cwd=workdir, capture_output=True, text=True, timeout=30,
-                           env={"PATH": os.environ.get("PATH", ""), "PYTHONDONTWRITEBYTECODE": "1", "HOME": str(workdir)})   # model-written code: no inherited secrets
+                           env={**{k: os.environ[k] for k in ("SYSTEMROOT", "TEMP", "TMP") if k in os.environ},      # Windows needs these to start Python
+                                "PATH": os.environ.get("PATH", ""), "PYTHONDONTWRITEBYTECODE": "1", "HOME": str(workdir), "USERPROFILE": str(workdir)})   # model-written code: no inherited secrets
         data = json.loads(r.stdout.strip().splitlines()[-1])
         return data["passed"] / data["total"] if data["total"] else 0.0
     except (subprocess.TimeoutExpired, json.JSONDecodeError, IndexError, KeyError):

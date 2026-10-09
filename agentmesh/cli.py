@@ -478,8 +478,11 @@ def cmd_verify(args: argparse.Namespace) -> int:
     results, ok_all = [], True
     for c in cmds:
         run_dir = cwd / c["cwd"]
-        argv = shlex.split(c["run"])
-        if not shutil.which(argv[0]):
+        argv = shlex.split(c["run"], posix=os.name != "nt")
+        exe = shutil.which(argv[0])
+        if exe:
+            argv[0] = exe                      # resolves .cmd/.exe shims on Windows
+        else:
             results.append({**c, "result": "NOT_RUN", "detail": f"{argv[0]} not found"})
             ok_all = False
             continue
@@ -588,6 +591,8 @@ def cmd_launch(args: argparse.Namespace) -> int:
     os.chdir(cfg.paths.root)
     env = {**os.environ, "AGENTMESH_DEPTH": "0", "AGENTMESH_MANAGER": name}
     sys.stdout.flush()
+    if os.name == "nt":      # exec* does not replace the process on Windows
+        return subprocess.run([info.path or name, *args.extra], env=env).returncode
     os.execvpe(info.path or name, [info.path or name, *args.extra], env)
     return 0   # pragma: no cover
 
@@ -846,6 +851,11 @@ def build_parser() -> argparse.ArgumentParser:
 
 
 def main(argv: list[str] | None = None) -> int:
+    for stream in (sys.stdout, sys.stderr):      # Windows consoles default to a legacy code page
+        try:
+            stream.reconfigure(encoding="utf-8", errors="replace")
+        except (AttributeError, ValueError):
+            pass
     parser = build_parser()
     args = parser.parse_args(argv)
     if not getattr(args, "fn", None):

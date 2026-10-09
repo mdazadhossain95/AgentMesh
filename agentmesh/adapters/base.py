@@ -20,6 +20,10 @@ from ..errors import ErrorCode, UnsupportedError, classify_text
 from ..models import AgentInfo, Task, WorkerState, utcnow
 from ..security import redact
 
+# own process group so a timeout can end the worker and its children
+_NEW_GROUP: dict = ({"creationflags": subprocess.CREATE_NEW_PROCESS_GROUP} if os.name == "nt"
+                    else {"start_new_session": True})
+
 _LONG_FLAG = re.compile(r"(?<![\w-])--[A-Za-z0-9][\w-]*")
 _SHORT_FLAG = re.compile(r"(?<![\w-])-[A-Za-z](?![\w-])")
 
@@ -206,7 +210,7 @@ class AgentAdapter(ABC):
             proc = subprocess.Popen(
                 spec.argv, cwd=spec.cwd, env=env, text=True, errors="replace",
                 stdin=subprocess.PIPE if spec.stdin is not None else subprocess.DEVNULL,
-                stdout=subprocess.PIPE, stderr=subprocess.PIPE, start_new_session=True)
+                stdout=subprocess.PIPE, stderr=subprocess.PIPE, **_NEW_GROUP)
         except FileNotFoundError:
             raw.not_found = True
             return self._finish(raw, t0)
@@ -232,6 +236,9 @@ class AgentAdapter(ABC):
 
     @staticmethod
     def _kill(proc: subprocess.Popen[str]) -> None:
+        if os.name == "nt":      # no process groups: taskkill /T ends the whole tree
+            subprocess.run(["taskkill", "/T", "/F", "/PID", str(proc.pid)], capture_output=True)
+            return
         try:
             os.killpg(proc.pid, signal.SIGTERM)
             try:
