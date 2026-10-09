@@ -163,7 +163,7 @@ def test_cli_run_batch_end_to_end(flutter_backend, monkeypatch, capsys, tmp_path
     assert main(["init", "--auto", "--yes"]) == 0
     commit_all(flutter_backend, "init")
     capsys.readouterr()
-    assert main(["plan", "Fix padding on the profile screen", "--emit-batch", "b.json"]) == 0
+    assert main(["plan", "Fix padding on the profile screen", "--risk", "normal", "--emit-batch", "b.json"]) == 0
     capsys.readouterr()
     code = main(["run-batch", "b.json", "--json", "--max-parallel", "2"])
     data = json.loads(capsys.readouterr().out)

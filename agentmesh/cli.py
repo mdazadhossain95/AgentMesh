@@ -27,7 +27,8 @@ from .roles import GLOBAL_FORBIDDEN
 from .runner import Runner, check_depth
 from .state import RuntimeState
 from .task_manager import TaskManager
-from .workflow import plan_task
+from . import risk as risk_mod
+from .workflow import REVIEW_ROLES, plan_task
 
 EXIT_FAILED, EXIT_SCOPE = 3, 4
 
@@ -217,7 +218,11 @@ def cmd_doctor(args: argparse.Namespace) -> int:
 def cmd_plan(args: argparse.Namespace) -> int:
     cfg = _project(args)
     wf = load_yaml(cfg.paths.workflow_yaml)
-    plan = plan_task(wf, args.task, args.signal)
+    from . import risk as risk_mod
+    rk = risk_mod.assess(args.task, [], override=args.risk, vocab=wf.get("signals"),
+                         high_paths=cfg.get("risk.high_paths", []), low_paths=cfg.get("risk.low_paths", []))
+    plan = plan_task(wf, args.task, args.signal, risk=rk.tier, risk_reasons=rk.reasons,
+                     review_mode=cfg.get("review.mode", "auto"))
     registry = build_registry()
     router_info = _infos(registry)
     state = RuntimeState(cfg.paths.state_dir / "workers.json")
@@ -236,7 +241,7 @@ def cmd_plan(args: argparse.Namespace) -> int:
     if args.json:
         out(json.dumps(data, indent=2))
         return 0
-    out(f"Task: {plan.task}\nSignals: {', '.join(plan.signals) or '-'}")
+    out(f"Task: {plan.task}\nSignals: {', '.join(plan.signals) or '-'}\nRisk: {plan.risk} ({'; '.join(plan.risk_reasons) or '-'})")
     if plan.needs_clarification:
         out(f"NEEDS CLARIFICATION: {plan.needs_clarification}")
     for i, s in enumerate(data["stages"], 1):
@@ -299,7 +304,7 @@ def cmd_delegate(args: argparse.Namespace) -> int:
         task = build_task(cfg, tm, TaskSpec(
             role=args.role, title=args.title or "", description=desc, requirements=args.requirement or [],
             constraints=args.constraint or [], acceptance=args.acceptance or [], verify=args.verify or [],
-            allow=args.allow or [], worker=args.worker, avoid_workers=args.avoid_worker or [], parent=args.parent,
+            allow=args.allow or [], worker=args.worker, avoid_workers=args.avoid_worker or [], parent=args.parent, risk=args.risk,
             reuse_worktree=args.reuse_worktree, base_tasks=args.base_task or [], inplace=args.inplace, timeout=args.timeout))
         result = runner.run(task, allow_fallback=not args.no_fallback)
 
@@ -455,6 +460,12 @@ def cmd_verify(args: argparse.Namespace) -> int:
         return 0
     result = tm.load_result(task.task_id)
     changed = result.changed_files if result else []
+    if not args.cmd and changed and result and result.status == "SUCCESS" and not result.policy_violations \
+            and effective_risk(cfg, task, changed) == "low" and risk_mod.assess("", changed).tier == "low":
+        task.verified = True            # low tier: docs/text only and scope clean, so the diff check is the verification
+        tm.save(task)
+        out(f"{task.task_id}: VERIFIED (low risk, diff check only: {', '.join(changed[:5])})")
+        return 0
     cmds = [{"name": "custom", "cwd": ".", "run": c} for c in args.cmd] if args.cmd else cfg.get("verification.commands", [])
     if not args.cmd and changed:
         touched = [c for c in cmds if c["component"] == "." or any(f.startswith(c["component"] + "/") for f in changed)]
@@ -494,6 +505,21 @@ def cmd_verify(args: argparse.Namespace) -> int:
     return 0 if ok_all else 1
 
 
+def effective_risk(cfg: ProjectConfig, task: Any, changed: list[str]) -> str:
+    """Stored tier, raised to high when the files actually changed say so (text can understate)."""
+    found = risk_mod.assess("", changed, high_paths=cfg.get("risk.high_paths", []), low_paths=cfg.get("risk.low_paths", []))
+    return risk_mod.higher(task.risk, "high" if found.tier == "high" else task.risk)
+
+
+def _review_passed(tm: TaskManager, task: Any) -> bool:
+    for t in tm.list():
+        if t.role in REVIEW_ROLES and task.task_id in (t.reuse_worktree_of, *t.base_tasks, *t.context_tasks):
+            r = tm.load_result(t.task_id)
+            if r and r.status == "SUCCESS":
+                return True
+    return False
+
+
 def cmd_integrate(args: argparse.Namespace) -> int:
     cfg = _project(args)
     tm = TaskManager(cfg.paths)
@@ -504,6 +530,11 @@ def cmd_integrate(args: argparse.Namespace) -> int:
         raise AgentMeshError(f"{task.task_id} status is {task.status}; only SUCCESS tasks can be integrated")
     if not task.verified and not args.force:
         raise AgentMeshError(f"{task.task_id} is not verified. Run `agentmesh verify {task.task_id}` (or --force).")
+    if not args.force and cfg.get("review.mode", "auto") != "never" and not _review_passed(tm, task):
+        res = tm.load_result(task.task_id)
+        if effective_risk(cfg, task, res.changed_files if res else []) == "high" or cfg.get("review.mode") == "always":
+            raise AgentMeshError(f"{task.task_id} is high risk: a successful reviewer task is required before integrate "
+                                 f"(delegate --role reviewer --reuse-worktree {task.task_id} --avoid-worker <author>, or --force)")
     from .worktree import Worktrees
     wt = Worktrees(cfg.paths.root, cfg.get("worktree.dir"))
     if task.verified or args.force:
@@ -739,6 +770,7 @@ def build_parser() -> argparse.ArgumentParser:
     sp.add_argument("--json", action="store_true"); sp.add_argument("--refresh", action="store_true")
     sp = add("plan", cmd_plan, "map a request to workflow stages and roles")
     sp.add_argument("task"); sp.add_argument("--signal", action="append", help="force a signal (api, app, backend, web, security, ...)")
+    sp.add_argument("--risk", choices=["low", "normal", "high"], help="override the computed risk tier")
     sp.add_argument("--json", action="store_true")
     sp.add_argument("--emit-batch", metavar="FILE", help="also write a run-batch file for this plan")
     sp = add("delegate", cmd_delegate, "run one role as a task on a routed worker (with fallback)")
@@ -755,6 +787,7 @@ def build_parser() -> argparse.ArgumentParser:
     sp.add_argument("--continue", dest="continue_task", metavar="TASK_ID", help="focused correction in the same worktree")
     sp.add_argument("--message", help="correction instructions for --continue")
     sp.add_argument("--timeout", type=int); sp.add_argument("--no-fallback", action="store_true")
+    sp.add_argument("--risk", choices=["low", "normal", "high"], help="override the computed risk tier")
     sp.add_argument("--force", action="store_true"); sp.add_argument("--refresh", action="store_true")
     sp.add_argument("--json", action="store_true"); sp.add_argument("--verbose", action="store_true")
     sp = add("run-batch", cmd_run_batch, "run a batch file: independent tasks in parallel, dependent ones in order")

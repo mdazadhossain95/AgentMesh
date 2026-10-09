@@ -16,6 +16,7 @@ from .prompting import build_prompt, parse_report, read_role
 from .registry import Registry
 from .router import Router
 from .security import redact
+from .workflow import REVIEW_ROLES
 from .state import RuntimeState
 from .task_manager import TaskManager
 from .worktree import Worktrees
@@ -134,9 +135,11 @@ class Runner:
 
         bench_rows = load_saved()
         worker_attempts = 0
+        authors = self.authors_of(task) if task.role in REVIEW_ROLES and self._needs_other_worker() else set()
+        strict = bool(authors) and task.risk == "high"
         while worker_attempts < max_attempts:
             ranking = self.router.rank(task.role, exclude=tried, preferred=task.preferred_worker,
-                                       avoid=set(task.avoid_workers))
+                                       avoid=set(task.avoid_workers) | authors, strict_avoid=strict)
             if not ranking.candidates:
                 if not result.attempts:
                     why = "; ".join(f"{w}: {r}" for w, r in ranking.skipped.items()) or "no workers registered"
@@ -221,6 +224,9 @@ class Runner:
             if report.get("summary"):
                 result.summary = str(report["summary"])
             result.changed_files = self._changed(cwd, ref, pre_dirty)
+            if result.worker in authors:
+                note = f"NOTE: reviewed by {result.worker}, which also wrote the code (no other worker was available)."
+                result.summary = f"{note} {result.summary}"
             viol = scope.violations(result.changed_files, task.allowed_paths, task.forbidden_paths,
                                     task.capability == "read-only")
             result.policy_violations = viol
@@ -242,6 +248,30 @@ class Runner:
         return self._finish(task, result, error=last_code, summary=summary, keep_stdout=raw_final is not None)
 
     # ---- helpers ----
+    def _needs_other_worker(self) -> bool:
+        return bool(self.config.get("review.require_different_worker", True))
+
+    def authors_of(self, task: Task) -> set[str]:
+        """Workers that produced the code a review task looks at (via reuse/base/context tasks, transitively)."""
+        out: set[str] = set()
+        seen: set[str] = set()
+        todo = [*([task.reuse_worktree_of] if task.reuse_worktree_of else []), *task.base_tasks, *task.context_tasks]
+        while todo:
+            tid = todo.pop()
+            if tid in seen:
+                continue
+            seen.add(tid)
+            try:
+                t = self.tasks.load(tid)
+            except AgentMeshError:
+                continue
+            if t.role not in REVIEW_ROLES:
+                r = self.tasks.load_result(tid)
+                if r and r.worker:
+                    out.add(r.worker)
+            todo += [*([t.reuse_worktree_of] if t.reuse_worktree_of else []), *t.base_tasks, *t.context_tasks]
+        return out
+
     def _model_chain(self, worker: str) -> list[str | None]:
         """Ordered models for a worker (workers.models.<worker>: str or list); known-bad ones are skipped."""
         cfg = self.config.get(f"workers.models.{worker}")

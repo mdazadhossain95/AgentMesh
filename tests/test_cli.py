@@ -85,7 +85,7 @@ def test_doctor_without_project_still_reports_workers(tmp_path, monkeypatch, cap
 
 
 def test_plan_command(project, capsys):
-    code, out, _ = run(capsys, "plan", "Fix padding on the screen", "--json")
+    code, out, _ = run(capsys, "plan", "Fix padding on the screen", "--json", "--risk", "normal")
     data = json.loads(out)
     assert [s["role"] for s in data["stages"] if s["role"] and not s["conditional"]] == ["app-engineer", "test-executor", "reviewer"]
     assert data["stages"][0]["worker_preview"][0] == "m1"      # configured preferred order

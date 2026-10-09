@@ -43,7 +43,7 @@ class Router:
         return out
 
     def rank(self, role: str, *, strategy: str | None = None, exclude: set[str] | None = None,
-             preferred: str | None = None, avoid: set[str] | None = None) -> Ranking:
+             preferred: str | None = None, avoid: set[str] | None = None, strict_avoid: bool = False) -> Ranking:
         self.state.refresh()
         strategy = strategy or self.config.get("routing.strategy", "balanced")
         exclude, avoid = set(exclude or ()), {self.registry.resolve(a) for a in (avoid or ())}
@@ -76,6 +76,11 @@ class Router:
             lead = [self.registry.resolve(preferred)] + [n for n in lead if n != self.registry.resolve(preferred)]
         ordered = lead + [n for n in ordered if n not in lead]
         # Soft preference: keep workers that did the implementation away from review of it.
-        ordered = [n for n in ordered if n not in avoid] + [n for n in ordered if n in avoid]
+        if strict_avoid:        # hard rule (e.g. a reviewer must not be the author): avoided workers are not candidates
+            for n in [n for n in ordered if n in avoid]:
+                ranking.skipped[n] = "wrote the code under review"
+            ordered = [n for n in ordered if n not in avoid]
+        else:
+            ordered = [n for n in ordered if n not in avoid] + [n for n in ordered if n in avoid]
         ranking.candidates = ordered
         return ranking

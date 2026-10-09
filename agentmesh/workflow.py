@@ -16,6 +16,7 @@ SIGNALS: dict[str, list[str]] = {
     "feature": ["implement", "add ", "build", "create", "new feature", "support for", "introduce", "integrate"],
 }
 MULTI_AREA = ("api", "backend", "app", "web")
+REVIEW_ROLES = ("reviewer", "security-reviewer", "compliance-reviewer", "threat-reviewer")
 
 
 def generate_workflow(project_name: str, kind: str, roles: list[str]) -> dict[str, Any]:
@@ -73,12 +74,15 @@ class Plan:
     signals: list[str] = field(default_factory=list)
     stages: list[PlanStage] = field(default_factory=list)
     needs_clarification: str | None = None
+    risk: str = "normal"
+    risk_reasons: list[str] = field(default_factory=list)
 
     def roles(self) -> list[str]:
         return [s.role for s in self.stages if s.role and not s.conditional]
 
     def to_dict(self) -> dict[str, Any]:
         return {"task": self.task, "signals": self.signals, "needs_clarification": self.needs_clarification,
+                "risk": self.risk, "risk_reasons": self.risk_reasons,
                 "stages": [s.__dict__ for s in self.stages]}
 
 
@@ -94,10 +98,12 @@ def detect_signals(text: str, vocab: dict[str, list[str]], extra: list[str] | No
     return sorted(found)
 
 
-def plan_task(workflow: dict[str, Any], text: str, extra_signals: list[str] | None = None) -> Plan:
+def plan_task(workflow: dict[str, Any], text: str, extra_signals: list[str] | None = None, *,
+              risk: str = "normal", risk_reasons: list[str] | None = None, review_mode: str = "auto") -> Plan:
+    """risk tier shapes the plan: low = implement + manager check only; high = also spec and every specialist review."""
     signals = detect_signals(text, workflow.get("signals", SIGNALS), extra_signals)
     sigset = set(signals)
-    plan = Plan(text, signals)
+    plan = Plan(text, signals, risk=risk, risk_reasons=list(risk_reasons or []))
     stages = workflow["stages"]
     impl = [s for s in stages if s.get("kind") == "implementation"]
     chosen_impl = [s["id"] for s in impl if sigset & set(s["when"]["any_of"])]
@@ -124,7 +130,22 @@ def plan_task(workflow: dict[str, Any], text: str, extra_signals: list[str] | No
             plan.stages.append(PlanStage(sid, s["role"], reason="always"))
         else:
             hit = sigset & set(s["when"]["any_of"])
-            if hit and not (sigset & set(s.get("skip_when", []))):
+            if risk == "high" and (sid == "spec" or s["role"] in REVIEW_ROLES):
+                plan.stages.append(PlanStage(sid, s["role"], reason="high risk" + (f"; signals: {', '.join(sorted(hit))}" if hit else "")))
+            elif hit and not (sigset & set(s.get("skip_when", []))):
                 plan.stages.append(PlanStage(sid, s["role"], reason=f"signals: {', '.join(sorted(hit))}"))
+    plan.stages = [st for st in plan.stages if _keep_stage(st, risk, review_mode)]
     # keep declared order but put review stages before manager-verify (already by stage order)
     return plan
+
+
+def _keep_stage(st: PlanStage, risk: str, review_mode: str) -> bool:
+    if st.actor == "manager":
+        return True
+    if st.role in REVIEW_ROLES:
+        if review_mode == "never":
+            return False
+        return risk != "low" or review_mode == "always"
+    if risk == "low":                       # quick diff check only: implementation stays, the rest goes
+        return st.id.startswith("implement-")
+    return True

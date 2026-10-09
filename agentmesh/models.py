@@ -108,6 +108,7 @@ class Task(_Serializable):
     branch: str | None = None
     base_commit: str | None = None
     verified: bool = False
+    risk: str = "normal"                 # low | normal | high (see risk.py)
     created_at: str = field(default_factory=utcnow)
 
 

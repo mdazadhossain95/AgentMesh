@@ -6,6 +6,7 @@ from dataclasses import dataclass, field
 from .config import ProjectConfig
 from .errors import AgentMeshError
 from .models import Task
+from .risk import Risk, assess, higher
 from .roles import GLOBAL_FORBIDDEN
 from .task_manager import TaskManager
 
@@ -28,6 +29,22 @@ class TaskSpec:
     context_tasks: list[str] = field(default_factory=list)
     inplace: bool = False
     timeout: int | None = None
+    risk: str | None = None             # override; else classified from title+description
+
+
+def risk_for(cfg: ProjectConfig, spec: TaskSpec) -> Risk:
+    text = f"{spec.title}\n{spec.description}"
+    return assess(text, [], override=spec.risk, high_paths=cfg.get("risk.high_paths", []),
+                  low_paths=cfg.get("risk.low_paths", []))
+
+
+def inherited_risk(tm: TaskManager, spec: TaskSpec, own: str) -> str:
+    """A test/review task is as risky as the work it checks."""
+    tier = own
+    for tid in [spec.reuse_worktree, *spec.base_tasks, *spec.context_tasks]:
+        if tid:
+            tier = higher(tier, tm.load(tid).risk)
+    return tier
 
 
 def build_task(cfg: ProjectConfig, tm: TaskManager, spec: TaskSpec) -> Task:
@@ -49,6 +66,7 @@ def build_task(cfg: ProjectConfig, tm: TaskManager, spec: TaskSpec) -> Task:
         reuse_worktree_of=spec.reuse_worktree, base_tasks=spec.base_tasks, context_tasks=spec.context_tasks,
         isolation="inplace" if (spec.inplace or (read_only and not spec.reuse_worktree and not stacked))
         else policy.get("isolation", "worktree"),
-        timeout_seconds=spec.timeout or int(cfg.get("workers.timeout_seconds", 1800)))
+        timeout_seconds=spec.timeout or int(cfg.get("workers.timeout_seconds", 1800)),
+        risk=spec.risk or inherited_risk(tm, spec, risk_for(cfg, spec).tier))
     tm.save(task)
     return task

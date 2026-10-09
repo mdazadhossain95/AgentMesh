@@ -44,7 +44,8 @@ def load_batch(path: Path) -> list[BatchItem]:
             role=t["role"], title=t.get("title", ""), description=t.get("description", ""),
             requirements=t.get("requirements", []), constraints=t.get("constraints", []),
             acceptance=t.get("acceptance", []), verify=t.get("verify", []), allow=t.get("allow", []),
-            worker=t.get("worker"), avoid_workers=t.get("avoid_workers", []), timeout=t.get("timeout"))
+            worker=t.get("worker"), avoid_workers=t.get("avoid_workers", []), timeout=t.get("timeout"),
+            risk=t.get("risk"))
         items.append(BatchItem(t["id"], spec, list(t.get("depends_on", []))))
     validate(items)
     return items
@@ -160,5 +161,5 @@ def template_from_plan(plan_dict: dict[str, Any], request: str) -> dict[str, Any
         elif sid == "test": deps = impl
         else: deps = impl + (["test"] if "test" in ids else [])      # reviews
         tasks.append({"id": sid, "role": s["role"], "title": f"{sid}: {request[:60]}", "description": request,
-                      "acceptance": [], "depends_on": deps})
+                      "acceptance": [], "depends_on": deps, "risk": plan_dict.get("risk", "normal")})
     return {"tasks": tasks}

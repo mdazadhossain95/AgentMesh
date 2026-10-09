@@ -57,7 +57,11 @@ DEFAULTS: dict[str, Any] = {
         "stop_window_hours": 12,
         "claude_hooks": True,              # init writes .claude/settings.json
     },
-    "parallel": {"max_workers": 3},         # run-batch: tasks at once
+    "parallel": {"max_workers": 3},
+    "risk": {"high_paths": [], "low_paths": []},       # extra globs on top of the built-in tiers (risk.py)
+    "review": {"mode": "auto",                         # auto: tier decides | always | never
+               "require_different_worker": True},      # reviewer must not be the worker that wrote the code
+    "economy": {"mode": "auto"},                       # token saving: auto = init/doctor suggest tools | off (key is not "tokens": the secret redactor flags that)         # run-batch: tasks at once
     "references": [],
     "overrides": {"roles": {}},            # per-role patches applied over generated `roles`
 }
