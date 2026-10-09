@@ -194,3 +194,50 @@ def test_doctor_reports_manager_file(flutter_backend):
     sections, _ = run_doctor(flutter_backend, reg, discovery.current(reg))
     mgr = next(c for s in sections for c in s.checks if c.label.startswith("manager "))
     assert mgr.status == "WARN"
+
+
+# ---- token saving (economy) ----
+def test_economy_assess_reasons(tmp_path):
+    from agentmesh import economy
+    none = lambda _n: None
+    have = lambda n: f"/bin/{n}"
+    home = tmp_path / "home"
+    small = {a.tool: a for a in economy.assess(tmp_path, which=none, home=home, file_count=40)}
+    assert small["rtk"].status == "INFO" and "no verification" in small["rtk"].reason
+    assert small["codegraph"].status == "INFO" and "little gain" in small["codegraph"].reason
+    (home / ".claude/plugins/cache/caveman").mkdir(parents=True)
+    big = {a.tool: a for a in economy.assess(tmp_path, verification_commands=3, which=have, home=home, file_count=900)}
+    assert big["rtk"].status == "READY" and big["caveman"].status == "READY"
+    assert "ask the user" in big["codegraph"].reason and not (tmp_path / ".codegraph").exists()   # never indexes by itself
+    (tmp_path / ".codegraph").mkdir()
+    assert {a.tool: a for a in economy.assess(tmp_path, which=have, home=home, file_count=900)}["codegraph"].status == "READY"
+    assert economy.assess(tmp_path, mode="off") == []
+
+
+def test_economy_count_files_skips_vendor_dirs(tmp_path):
+    from agentmesh import economy
+    for i in range(3):
+        write(tmp_path, f"src/a{i}.py", "x")
+    for i in range(50):
+        write(tmp_path, f"node_modules/p/f{i}.js", "x")
+    assert economy.count_files(tmp_path) == 3
+
+
+def test_init_writes_token_rules_and_respects_off(flutter_only):
+    init_with(flutter_only, REG())
+    assert "### Token economy" in (flutter_only / "CLAUDE.md").read_text()
+    assert "CodeGraph" not in (flutter_only / "CLAUDE.md").read_text()
+    p = flutter_only / ".agentmesh" / "project.yaml"
+    d = load_yaml(p); d["economy"] = {"mode": "off"}; p.write_text(dump_yaml(d))
+    rep = init_with(flutter_only, REG())
+    assert "### Token economy" not in (flutter_only / "CLAUDE.md").read_text() and rep.token_advice == []
+
+
+def test_doctor_shows_token_saving_section(flutter_only):
+    from agentmesh import discovery
+    from agentmesh.health import run_doctor
+    reg = REG()
+    init_with(flutter_only, reg)
+    sections, _ = run_doctor(flutter_only, reg, discovery.current(reg))
+    eco = next(s for s in sections if s.title == "Token saving")
+    assert {c.label for c in eco.checks} == {"rtk", "caveman", "codegraph", "ponytail"}

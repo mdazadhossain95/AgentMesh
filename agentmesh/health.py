@@ -4,7 +4,7 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from pathlib import Path
 
-from . import bootstrap, enforcement, gitutil
+from . import bootstrap, economy, enforcement, gitutil
 from .config import ProjectConfig, load_yaml
 from .discovery import DiscoveryReport
 from .errors import AgentMeshError
@@ -102,6 +102,15 @@ def run_doctor(root: Path | None, registry: Registry, report: DiscoveryReport) -
     if not msgs:
         bench.add("saved scores", "READY", "fresh for all ready workers")
     sections.append(bench)
+
+    if cfg is not None:
+        eco = Section("Token saving")
+        mode = cfg.get("economy.mode", "auto")
+        if mode == "off":
+            eco.add("economy", "INFO", "off (economy.mode)")
+        for a in economy.assess(cfg.paths.root, mode=mode, verification_commands=len(cfg.get("verification.commands", []) or [])):
+            eco.add(a.tool, a.status, a.reason)
+        sections.append(eco)
 
     git = Section("Git")
     gr = gitutil.repo_root(root or Path.cwd())

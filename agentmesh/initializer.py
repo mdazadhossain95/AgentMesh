@@ -7,7 +7,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Callable
 
-from . import benchmark, bootstrap, discovery, enforcement, fsutil, gitutil
+from . import benchmark, bootstrap, discovery, economy, enforcement, fsutil, gitutil
 from .config import (DEFAULT_QUALITY_ORDER, DEFAULTS, MACHINE_KEYS, SCHEMA_VERSION, ProjectPaths, deep_merge,
                      dump_yaml, load_yaml)
 from .errors import ProjectError
@@ -33,6 +33,7 @@ class InitReport:
     assumptions: list[str] = field(default_factory=list)
     ready_workers: list[str] = field(default_factory=list)
     warnings: list[str] = field(default_factory=list)
+    token_advice: list[str] = field(default_factory=list)
 
 
 def tty_asker(text: str, choices: list[str], default: str) -> str:
@@ -184,8 +185,12 @@ def init_project(root: Path, registry: Registry, *, asker: Asker | None = None, 
         paths.runtime_dir.mkdir(parents=True, exist_ok=True)
     act[".agentmesh/README.md"] = fsutil.write_generated(paths.mesh / "README.md", bootstrap.project_readme(), "md", dry_run)
     act[".gitignore"] = bootstrap.update_gitignore(root, dry_run)
+    eco_on = human["economy"].get("mode", "auto") != "off"
+    out.token_advice = economy.lines(economy.assess(root, mode=human["economy"].get("mode", "auto"),
+                                                    verification_commands=len(commands)))
     section = bootstrap.manager_section(profile.name, profile.kind, roles, int(human["delegation"]["max_depth"]),
-                                        int(wf["limits"]["max_correction_rounds"]))
+                                        int(wf["limits"]["max_correction_rounds"]),
+                                        economy=bootstrap.token_rules((root / ".codegraph").is_dir()) if eco_on else "")
     for f, status in bootstrap.write_manager_files(root, human["manager"]["bootstrap_files"], section, dry_run).items():
         act[f] = status
     if human["enforcement"].get("claude_hooks", True) and human["enforcement"].get("mode") != "off":

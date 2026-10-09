@@ -36,3 +36,4 @@ Project kind: `{kind}`. Roles available: {roles}.
 - Workers must not delegate (max depth {max_depth}). Do not launch other agent CLIs yourself for roles AgentMesh can run.
 - Never put credentials in prompts, tasks or reports. `agentmesh status` shows worker availability (quota is never guessed).
 - Human instructions elsewhere in this file take precedence over defaults here.
+{token_rules}

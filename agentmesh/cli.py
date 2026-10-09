@@ -189,6 +189,8 @@ def cmd_init(args: argparse.Namespace) -> int:
         out(f"assumption: {a}")
     for w in rep.warnings:
         out(f"warning: {w}")
+    for t in rep.token_advice:
+        out(f"tokens: {t}")
     from . import benchmark as _bm
     for m in _bm.stale_messages(discovery.current(build_registry()).by_name()):
         out(f"benchmark: {m}")
