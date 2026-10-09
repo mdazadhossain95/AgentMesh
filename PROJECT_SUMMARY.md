@@ -7,7 +7,7 @@ are separated from **workers** (CLIs chosen per run by a router with fallback).
 `agentmesh/` cli · config · models · errors · security(redact) · discovery · registry · router · runner · prompting · scope ·
 worktree · progress · risk · economy · gitutil · task_manager · state · project_analyzer · roles · workflow · initializer · bootstrap · reference · health · fsutil ·
 `adapters/` base, claude, codex, antigravity, opencode, cline, kiro, copilot, freebuff, kilo, generic, mock · `templates/` ·
-`tests/` (269) · `examples/`.
+`tests/` (271) · `examples/`.
 
 ## 2. Key decisions
 * Adapters emit only flags found in the CLI's own `--help`; state READY/UNVERIFIED/INTERACTIVE_ONLY/CONFIGURATION_REQUIRED.
@@ -38,9 +38,9 @@ Live smoke per worker + store results; parse more structured outputs; parallel r
 
 Benchmark staleness: saved rows now carry cli_version + at; `benchmark.stale_messages` warns (doctor 'Benchmark' section, init output) when scores are >30 days old, CLI version changed, fewer tasks than current, or missing. Currently flags antigravity (old default-model row), kilo, opencode (old 4-task runs) until re-run.
 
-## 6. Done 2026-10-09 (all five Todo items, 269 tests, offline)
+## 6. Done 2026-10-09 (all five Todo items, 271 tests, offline)
 1. Manager file per CLI: `bootstrap.manager_file()`; copilot, cline, kilo, kiro, agy all read AGENTS.md (verified by grepping installed binaries; copilot also reads CLAUDE.md). `doctor` line "manager <cli>".
-2. Risk tiers (`risk.py`): text + changed paths -> low/normal/high; `--risk` override on plan/delegate/batch; `risk.high_paths/low_paths`. Low = implement + manager check, docs-only diff verifies without commands. High = adds spec + specialist reviews, `integrate` needs a successful reviewer task that finished after the last correction. verify/integrate re-check changed files (text can understate). Review tasks inherit the tier of the work they check; cannot be lowered.
+2. Risk tiers (`risk.py`): text + changed paths -> low/normal/high; `--risk` override on plan/delegate/batch; `risk.high_paths/low_paths`. Low = implement + manager check, docs-only diff verifies without commands. High = adds spec + specialist reviews, `integrate` needs a successful reviewer task created at the current correction round (a later `--continue` voids it; any new run also clears `verified`). verify/integrate re-check changed files (text can understate). Review tasks inherit the tier of the work they check; cannot be lowered.
 3. Token saving (`economy.py`): `economy.mode: auto|off` (NOT named `tokens`: the secret redactor flags it). init prints advice, doctor has a "Token saving" section, manager section gets "Token economy" rules. Never runs `codegraph init`.
 4. Second-agent review: `review.mode auto|always|never`, `review.require_different_worker`. Router `strict_avoid`; Runner.authors_of counts only workers whose tasks changed files. Soft for normal (NOTE in summary), hard for high (NO_WORKER_AVAILABLE).
 5. `benchmark --quick`: 2 tasks (slugify, lru), default model, rows flagged quick; never replace full rows, never used for ordering/chains; stale message says "quick check only".

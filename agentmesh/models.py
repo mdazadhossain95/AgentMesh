@@ -109,6 +109,7 @@ class Task(_Serializable):
     base_commit: str | None = None
     verified: bool = False
     risk: str = "normal"                 # low | normal | high (see risk.py)
+    reviewed: dict[str, int] = field(default_factory=dict)   # review tasks: target task id -> its correction round when this was created
     created_at: str = field(default_factory=utcnow)
 
 

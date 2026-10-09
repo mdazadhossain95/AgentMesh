@@ -116,6 +116,7 @@ class Runner:
             return self._finish(task, result, error=e.code, summary=str(e))
         result.worktree, result.branch = task.worktree, task.branch
         task.status = TaskStatus.RUNNING.value
+        task.verified = False            # any new run (continue/correction) voids an earlier verification
         self.tasks.save(task)
 
         in_git = gitutil.repo_root(cwd) is not None and gitutil.has_commits(cwd)

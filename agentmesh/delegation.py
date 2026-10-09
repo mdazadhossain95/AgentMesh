@@ -61,6 +61,8 @@ def build_task(cfg: ProjectConfig, tm: TaskManager, spec: TaskSpec) -> Task:
     own = spec.risk or risk_for(cfg, spec).tier
     inherited = inherited_risk(tm, spec, own)       # before next_id(): a bad task id must not leave an empty record behind
     tier = higher(own, inherited) if spec.role in REVIEW_ROLES else (spec.risk or inherited)
+    reviewed = {tid: tm.load(tid).retry_count for tid in dict.fromkeys([spec.reuse_worktree, *spec.base_tasks, *spec.context_tasks])
+                if tid} if spec.role in REVIEW_ROLES else {}
     task = Task(
         task_id=tm.next_id(), title=title, role=spec.role, description=spec.description,
         capability=policy.get("capability", "write"), requirements=spec.requirements, constraints=spec.constraints,
@@ -73,6 +75,6 @@ def build_task(cfg: ProjectConfig, tm: TaskManager, spec: TaskSpec) -> Task:
         isolation="inplace" if (spec.inplace or (read_only and not spec.reuse_worktree and not stacked))
         else policy.get("isolation", "worktree"),
         timeout_seconds=spec.timeout or int(cfg.get("workers.timeout_seconds", 1800)),
-        risk=tier)
+        risk=tier, reviewed=reviewed)
     tm.save(task)
     return task

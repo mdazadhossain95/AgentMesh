@@ -514,13 +514,12 @@ def effective_risk(cfg: ProjectConfig, task: Any, changed: list[str]) -> str:
 
 
 def _review_passed(tm: TaskManager, task: Any) -> bool:
-    """A successful review that finished after the task's latest result (a later correction voids older reviews)."""
-    mine = tm.load_result(task.task_id)
-    since = mine.finished_at if mine else ""
+    """A successful review of the task's current correction round (a later `--continue` voids older reviews).
+    Rounds are counted, not timed: task timestamps only have 1-second resolution."""
     for t in tm.list():
-        if t.role in REVIEW_ROLES and task.task_id in (t.reuse_worktree_of, *t.base_tasks, *t.context_tasks):
+        if t.role in REVIEW_ROLES and t.reviewed.get(task.task_id) == task.retry_count:
             r = tm.load_result(t.task_id)
-            if r and r.status == "SUCCESS" and r.finished_at >= since:
+            if r and r.status == "SUCCESS":
                 return True
     return False
 

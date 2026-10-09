@@ -216,5 +216,24 @@ def test_review_before_a_later_correction_does_not_count(proj, capsys):
     main(["verify", "task-001", "--accept", "manual"])
     main(["delegate", "--role", "reviewer", "--title", "review", "--description", "r", "--reuse-worktree", "task-001"])
     main(["delegate", "--continue", "task-001", "--message", "fix"])
+    main(["verify", "task-001", "--accept", "manual again"])
     capsys.readouterr()
     assert main(["integrate", "task-001"]) != 0 and "high risk" in capsys.readouterr().err
+    main(["delegate", "--role", "reviewer", "--title", "re-review", "--description", "r", "--reuse-worktree", "task-001"])
+    assert main(["integrate", "task-001"]) == 0
+
+
+def test_scripts_under_docs_and_license_lookalikes_are_not_docs_only():
+    assert risk.assess("Fix typo", ["docs/deploy.sh"]).tier == "normal"
+    assert risk.assess("Fix typo", ["LICENSE_check.sh"]).tier == "normal"
+    assert risk.assess("Fix typo", ["docs/guide.md", "LICENSE"]).tier == "low"
+
+
+def test_correction_voids_earlier_verification(proj, capsys):
+    main(["delegate", "--role", "app-engineer", "--title", "Fix padding", "--description", "x"])
+    main(["verify", "task-001", "--accept", "manual"])
+    assert TaskManager(ProjectConfig.load(proj).paths).load("task-001").verified
+    main(["delegate", "--continue", "task-001", "--message", "fix"])
+    capsys.readouterr()
+    assert not TaskManager(ProjectConfig.load(proj).paths).load("task-001").verified
+    assert main(["integrate", "task-001"]) != 0

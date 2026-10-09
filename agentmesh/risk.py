@@ -12,7 +12,7 @@ HIGH_TEXT = ("security", "financial", "api", "backend")
 HIGH_WORDS = ("migration", "database", "schema", "drop table", "delete data", "production", "deploy")
 HIGH_PATHS = ["**/auth/**", "**/*auth*", "**/api/**", "**/migrations/**", "**/*.sql", "**/payment*/**", "**/billing/**",
               "**/security/**", "**/db/**", "**/database/**", "**/backend/**", "**/server/**", *CONTRACT_GLOBS]
-LOW_PATHS = ["**/*.md", "**/*.rst", "docs/**", "LICENSE*", "**/LICENSE*", ".gitignore", ".editorconfig"]   # not *.txt: requirements.txt etc. are build inputs
+LOW_PATHS = ["**/*.md", "**/*.rst", "LICENSE", "LICENSE.md", "LICENSE.txt", ".gitignore", ".editorconfig"]   # not *.txt: requirements.txt etc. are build inputs
 
 
 @dataclass
