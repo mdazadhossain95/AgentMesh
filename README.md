@@ -27,11 +27,44 @@ Two layers, never mixed:
 A role never depends on one CLI. When a worker hits quota, a rate limit, an auth failure, a timeout, or is missing,
 AgentMesh normalizes the error and re-runs the *same role, same prompt, same worktree* on the next eligible worker.
 
+## Why use it (in plain words)
+
+You probably have more than one AI coding CLI: some free, some paid, each with its own quota. Normally you pick one,
+hit its limit, then copy your work to another by hand. AgentMesh lets all of them work together on one project.
+
+* **Use every CLI you already have.** Claude Code, Codex, Kiro, Copilot, Kilo, OpenCode, Antigravity, Cline and others.
+  Free and paid ones work side by side.
+* **No quota stops.** When one CLI runs out of quota, hits a rate limit or is missing, the same task moves to the next
+  CLI automatically. Nothing is lost.
+* **Cheap first.** List the CLIs you know are free in `routing.free_workers` and set `routing.strategy: free-first`;
+  they are tried before paid ones. AgentMesh does not guess which CLIs are free.
+* **Agents for your project.** `init` reads the project and creates the right roles (backend engineer, app engineer,
+  tester, reviewer, ...) as plain files in `.agentmesh/agents/`. Any CLI can play any role.
+* **Safer results.** Each task runs in its own git worktree. AgentMesh checks the real git diff, runs your tests, and
+  merges only verified work. Risky changes (auth, API, database) get an extra reviewer, and a different CLI than the one
+  that wrote the code.
+* **Fewer tokens.** `init` and `doctor` suggest token-saving tools that fit the project (RTK, caveman, CodeGraph) and
+  ask you before anything is set up. The manager also gets short rules: terse replies, small diffs first, cheap checks
+  always, expensive ones only when you ask.
+
+### How to start
+
+1. **Log in to each CLI once, yourself.** AgentMesh never logs in for you and never sees your credentials. Run
+   `claude`, `codex`, `kiro-cli`, ... one time each and sign in as you normally would.
+2. **Install AgentMesh once** (see [Install](#install)).
+3. **In any project:** `agentmesh init --auto`, then `agentmesh doctor`. This finds your logged-in CLIs, creates the
+   roles and workflow, and shows token-saving advice.
+4. **Open your favorite CLI** as manager (`agentmesh launch claude`, or just `claude`) and describe the work. The
+   manager plans it, hands each part to a worker, checks the result, and merges it.
+
+If a CLI is not logged in, AgentMesh treats it as unavailable and uses the next one. Add more CLIs later and run
+`agentmesh init --auto` again; your settings are kept.
+
 ## Status — read this first
 
 This is an MVP. What is actually verified, as of the last run on the author's machine (macOS, Python 3.14):
 
-* **Verified by automated tests (219, no network, no paid calls):** discovery, registry, config, project/Flutter detection,
+* **Verified by automated tests (271, no network, no paid calls):** discovery, registry, config, project/Flutter detection,
   Agent Pack generation, role selection, workflow planning, routing strategies, fallback, error normalization,
   worktree isolation + integration, init idempotency, CLAUDE.md preservation, generic adapter against real subprocesses,
   CLI end to end with mock workers.
