@@ -663,11 +663,16 @@ def cmd_benchmark(args: argparse.Namespace) -> int:
     rep = discovery.current(registry, refresh=True)
     infos = rep.by_name()
     cfg = _project(args, need=False)
+    if args.quick and (args.tasks or args.wide or args.apply):
+        raise AgentMeshError("--quick runs 2 tasks on each CLI's default model; it cannot combine with --tasks, --wide or --apply "
+                             "(quick scores are not used for ordering)")
     lists: dict[str, list[str]] = {}
-    if cfg:
+    if cfg and not args.quick:
         lists = {w: list(m) for w, m in (cfg.get("workers.models") or {}).items() if isinstance(m, list)}
     from .adapters import antigravity as ag_mod, kilo as kilo_mod, kiro as kiro_mod, opencode as oc_mod
-    if args.wide:                                    # every candidate model the CLIs report, not just the seeded chains
+    if args.quick:
+        pass
+    elif args.wide:                                    # every candidate model the CLIs report, not just the seeded chains
         if infos.get("kilo") and infos["kilo"].ready:
             code, txt = oc_mod.probe_command([infos["kilo"].path or "kilo", "models"], timeout=45)
             lists["kilo"] = [l.strip() for l in txt.splitlines() if l.strip().endswith(":free")]
@@ -686,7 +691,7 @@ def cmd_benchmark(args: argparse.Namespace) -> int:
                 lists[name] = mod.available_preferred_models(infos[name].path)
     only = {registry.resolve(w) for w in args.workers.split(",")} if args.workers else None
     cands = bm.candidates(registry, infos, lists, only)
-    tasks = [t for t in bm.TASKS if not args.tasks or t.id in args.tasks.split(",")]
+    tasks = [t for t in bm.TASKS if (t.id in bm.QUICK_TASKS if args.quick else not args.tasks or t.id in args.tasks.split(","))]
     runs = len(cands) * len(tasks)
     out(f"{len(cands)} candidates x {len(tasks)} tasks = up to {runs} live runs (parallel {args.parallel}, {args.per_worker} per CLI).")
     for w, m in cands:
@@ -696,12 +701,15 @@ def cmd_benchmark(args: argparse.Namespace) -> int:
         return 1
     results = bm.run_benchmark(registry, infos, cands, tasks=tasks, parallel=args.parallel, per_worker=args.per_worker,
                                timeout=args.timeout, emit=err)
-    path = bm.save(results, {w: i.version for w, i in infos.items()})
+    path = bm.save(results, {w: i.version for w, i in infos.items()}, quick=args.quick)
     rows = [[f"{i}", r.worker, r.model or "(default)", f"{r.total * 100:.0f}%", f"{r.seconds:.0f}s",
              " ".join(f"{s.score:.1f}" for s in r.scores), ",".join(r.errors)] for i, r in enumerate(bm.ranked(results), 1)]
     out("\n" + table(rows, ["#", "WORKER", "MODEL", "SCORE", "AVG TIME", "PER TASK", "ERRORS"]))
     sug = bm.suggestions(results)
-    out(f"\nsaved {path}\nsuggested worker quality order: {', '.join(sug['quality_order']) or '-'}")
+    if args.quick:
+        out(f"\nsaved {path} (quick rows: 'it works' only, not used for ordering; full rows are never replaced)")
+    else:
+        out(f"\nsaved {path}\nsuggested worker quality order: {', '.join(sug['quality_order']) or '-'}")
     if args.apply:
         if not cfg:
             raise AgentMeshError("--apply needs an initialized project")
@@ -823,6 +831,7 @@ def build_parser() -> argparse.ArgumentParser:
     sp.add_argument("--stdin-prompt", action="store_true")
     sp = add("benchmark", cmd_benchmark, "LIVE: score every worker/model on hidden-test coding tasks (uses quota)")
     sp.add_argument("--yes", action="store_true"); sp.add_argument("--apply", action="store_true", help="write measured model chains + quality_order into project.yaml")
+    sp.add_argument("--quick", action="store_true", help="cheap check: 2 easy tasks, each CLI's default model only")
     sp.add_argument("--wide", action="store_true", help="include every model each CLI lists (all kilo :free, all kiro, extra opencode)")
     sp.add_argument("--workers", help="comma list to limit, e.g. kilo,kiro"); sp.add_argument("--tasks", help="comma list of task ids: slugify,lru,intervals,duration")
     sp.add_argument("--parallel", type=int, default=6); sp.add_argument("--per-worker", type=int, default=2)

@@ -138,3 +138,35 @@ def test_stale_ignores_unready_workers_and_missing_version_in_old_rows():
     rows = [{"worker": "legacy", "model": None, "at": "2026-10-07T00:00:00+00:00", "tasks": [{"task": t.id} for t in bm.TASKS]}]
     infos = {"legacy": _info("legacy", version="2.0"), "off": _info("off", ready=False)}
     assert stale_messages(infos, rows, now) == []
+
+
+# ---- --quick ----
+def _res(worker, model, score, n_tasks):
+    r = CandidateResult(worker, model, planned=n_tasks)
+    r.scores = [TaskScore(t.id, score, 1.0) for t in bm.TASKS[:n_tasks]]
+    return r
+
+
+def test_quick_row_never_replaces_a_full_row(tmp_path):
+    bm.save([_res("w", None, 1.0, len(bm.TASKS))])
+    bm.save([_res("w", None, 0.2, 2), _res("v", None, 1.0, 2)], quick=True)
+    rows = {r["worker"]: r for r in bm.load_saved()}
+    assert rows["w"]["score"] == 1.0 and not rows["w"].get("quick")        # full row kept
+    assert rows["v"]["quick"] is True                                      # new worker gets a quick row
+    bm.save([_res("v", None, 0.5, len(bm.TASKS))])
+    assert not {r["worker"]: r for r in bm.load_saved()}["v"].get("quick")  # full run replaces quick
+
+
+def test_quick_rows_do_not_drive_ordering_or_chains():
+    bm.save([_res("a", "m1", 1.0, len(bm.TASKS)), _res("b", "m2", 1.0, 2)], quick=False)
+    bm.save([_res("q", "m3", 1.0, 2)], quick=True)
+    assert bm.measured_quality_order() == ["a", "b"]           # b was saved as a full row here; q is quick only
+    assert bm.measured_chain("q", ["m3"]) == []
+    assert bm.measured_chain("a", ["m1"]) == ["m1"]
+
+
+def test_stale_message_for_quick_only_worker():
+    from datetime import datetime, timezone
+    rows = [{"worker": "q", "model": None, "at": "2026-10-08T00:00:00+00:00", "quick": True, "tasks": [{"task": "slugify"}]}]
+    msgs = bm.stale_messages({"q": _info("q")}, rows, datetime(2026, 10, 9, tzinfo=timezone.utc))
+    assert len(msgs) == 1 and "quick check only" in msgs[0]

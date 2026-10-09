@@ -402,11 +402,19 @@ def load_saved() -> list[dict]:
         return []
 
 
-def save(results: list[CandidateResult], versions: dict[str, str | None] | None = None) -> Path:
-    """Merge into the saved file: a re-measured (worker, model) replaces its old entry, others are kept."""
+QUICK_TASKS = ("slugify", "lru")      # --quick: the two cheapest tasks, default model only
+
+
+def save(results: list[CandidateResult], versions: dict[str, str | None] | None = None, quick: bool = False) -> Path:
+    """Merge into the saved file: a re-measured (worker, model) replaces its old entry, others are kept.
+    A quick row never replaces a full one (2 easy tasks must not erase a real score)."""
     merged = {(r["worker"], r["model"]): r for r in load_saved()}
     for r in results:
-        merged[(r.worker, r.model)] = {**r.to_dict(), "at": utcnow(), "cli_version": (versions or {}).get(r.worker)}
+        key = (r.worker, r.model)
+        if quick and key in merged and not merged[key].get("quick"):
+            continue
+        merged[key] = {**r.to_dict(), "at": utcnow(), "cli_version": (versions or {}).get(r.worker),
+                       **({"quick": True} if quick else {})}
     p = saved_path()
     p.parent.mkdir(parents=True, exist_ok=True)
     rows = sorted(merged.values(), key=lambda r: (-r["score"], r["avg_seconds"] or 1e9))
@@ -416,7 +424,8 @@ def save(results: list[CandidateResult], versions: dict[str, str | None] | None 
 
 def measured_chain(worker: str, available: list[str], min_score: float = 0.5) -> list[str]:
     """Models of `worker` that this machine has AND that scored >= min_score, best first (ties: faster first)."""
-    rows = [r for r in load_saved() if r["worker"] == worker and r["model"] in available and r["score"] >= min_score]
+    rows = [r for r in load_saved() if r["worker"] == worker and r["model"] in available and r["score"] >= min_score
+            and not r.get("quick")]
     rows.sort(key=lambda r: (-r["score"], r["avg_seconds"] or 1e9))
     return [r["model"] for r in rows]
 
@@ -424,6 +433,8 @@ def measured_chain(worker: str, available: list[str], min_score: float = 0.5) ->
 def measured_quality_order(min_score: float = 0.5) -> list[str]:
     best: dict[str, dict] = {}
     for r in load_saved():
+        if r.get("quick"):
+            continue                       # quick rows say "it works", not "how good"
         if r["score"] >= min_score and (r["worker"] not in best or (-r["score"], r["avg_seconds"]) < (-best[r["worker"]]["score"], best[r["worker"]]["avg_seconds"])):
             best[r["worker"]] = r
     return [w for w, _ in sorted(best.items(), key=lambda kv: (-kv[1]["score"], kv[1]["avg_seconds"]))]
@@ -459,6 +470,11 @@ def stale_messages(infos: dict[str, AgentInfo], rows: list[dict] | None = None, 
         if not mine:
             out.append(f"{name}: no benchmark scores (agentmesh benchmark --workers {name} --yes)")
             continue
+        full = [r for r in mine if not r.get("quick")]
+        if not full:
+            out.append(f"{name}: quick check only, not used for ordering; run `agentmesh benchmark --workers {name} --yes` for a full score")
+            continue
+        mine = full
         why: list[str] = []
         try:
             newest = max(datetime.fromisoformat(r["at"]) for r in mine if r.get("at"))

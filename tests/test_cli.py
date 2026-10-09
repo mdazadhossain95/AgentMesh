@@ -204,3 +204,27 @@ def test_launch_validates_then_execs_manager(project, capsys, monkeypatch, tmp_p
     code, out, _ = run(capsys, "launch", "claude", "--", "--resume")
     assert code == 0 and "Launching Claude Code" in out and "Fallback" in out
     assert seen["argv"][1:] == ["--resume"] and seen["env"]["AGENTMESH_DEPTH"] == "0" and seen["env"]["AGENTMESH_MANAGER"] == "claude"
+
+
+def _quick_res(worker, model, score, n):
+    from agentmesh import benchmark as bm
+    r = bm.CandidateResult(worker, model, planned=n)
+    r.scores = [bm.TaskScore(x.id, score, 1.0) for x in bm.TASKS[:n]]
+    return r
+
+
+def test_cli_benchmark_quick_runs_two_tasks_default_model(project, monkeypatch, capsys):
+    from agentmesh import benchmark as bm
+    seen = {}
+    monkeypatch.setattr(bm, "candidates", lambda reg, infos, lists, only: seen.update(lists=dict(lists)) or [("w1", None)])
+    monkeypatch.setattr(bm, "run_benchmark", lambda *a, **k: seen.update(tasks=[t.id for t in k["tasks"]]) or [_quick_res("w1", None, 1.0, 2)])
+    code, out, _ = run(capsys, "benchmark", "--quick", "--yes")
+    assert code == 0 and seen["tasks"] == list(bm.QUICK_TASKS) and seen["lists"] == {}
+    assert "quick rows" in out
+    assert bm.load_saved()[0]["quick"] is True
+
+
+def test_cli_benchmark_quick_rejects_combinations(project, capsys):
+    for extra in (["--tasks", "lru"], ["--wide"], ["--apply"]):
+        code, _, err = run(capsys, "benchmark", "--quick", "--yes", *extra)
+        assert code != 0 and "--quick" in err
