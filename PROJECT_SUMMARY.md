@@ -53,3 +53,10 @@ Token-tool findings (2026-10-09, from web research): ponytail claims are mostly 
 ## Update 2026-10-09 (end of session)
 
 Repo public at github.com/mdazadhossain95/AgentMesh. Cross-platform (Windows locking/kill/launch/UTF-8), CI matrix on Ubuntu/macOS/Windows (py3.11, 3.13) green, README has plain-language intro + install-from-GitHub + platform table. Still unverified: real worker CLIs on Windows/Linux and any live delegate/review run.
+
+## Next session (resume 2026-10-11)
+
+* README: add "Add your own CLI" section (`agentmesh configure add-agent`); user has not confirmed yet.
+* Tag release `v0.1.0` so `AGENTMESH_REF` pinning works.
+* Untested: `install.ps1` on Windows; real worker CLIs on Windows/Linux. Smoke PASSED 2026-10-10 on claude, codex, kiro, copilot, opencode (Mac).
+* Optional: kilo/opencode/antigravity benchmark re-run (spends quota, only on request), cost-aware routing, fallback on failed verify, `agentmesh adopt`, PyPI.
