@@ -27,6 +27,56 @@ Two layers, never mixed:
 A role never depends on one CLI. When a worker hits quota, a rate limit, an auth failure, a timeout, or is missing,
 AgentMesh normalizes the error and re-runs the *same role, same prompt, same worktree* on the next eligible worker.
 
+## Quick start (copy, paste, go)
+
+Log in to each AI CLI you have (`claude`, `codex`, `kiro-cli`, ...) once, the normal way. AgentMesh never logs in for you.
+Then pick **one** way to get AgentMesh.
+
+### Way 1: install from GitHub (recommended, one line)
+
+This installs a global `agentmesh` command. Use it in any project, any time.
+
+macOS / Linux:
+```bash
+curl -LsSf https://raw.githubusercontent.com/mdazadhossain95/AgentMesh/main/install.sh | sh
+```
+Windows (PowerShell):
+```powershell
+powershell -c "irm https://raw.githubusercontent.com/mdazadhossain95/AgentMesh/main/install.ps1 | iex"
+```
+It installs `uv` if you don't have it, then AgentMesh. Open a **new terminal** afterwards. Run the same line again to update.
+
+### Way 2: download it and run from the folder
+
+For people who want the code on disk (to read it or change it).
+```bash
+git clone https://github.com/mdazadhossain95/AgentMesh
+cd AgentMesh
+uv tool install -e .          # global command that points at this folder (edits take effect at once)
+```
+No `uv`? `python -m venv .venv`, activate it, then `pip install -e .`. Or run it with no install at all:
+`python -m agentmesh --help` (after `pip install pyyaml`).
+
+### Then, in any project (one paste)
+
+```bash
+cd ~/Projects/MyApp && agentmesh init --auto --yes && agentmesh doctor && agentmesh launch claude
+```
+This finds your logged-in CLIs, creates the roles and workflow, checks health, and opens Claude Code as the manager.
+Swap `claude` for `codex`, `agy`, `kiro-cli`, ... if you prefer another manager. Now just tell it what to build:
+
+> Implement the profile API and the Flutter profile screen.
+
+The manager plans the work, gives each part to a worker CLI (the next one takes over if quota runs out), checks the
+real git diff, runs your tests, and merges only verified work.
+
+### Try it without installing (no changes to your machine)
+
+```bash
+uvx --from git+https://github.com/mdazadhossain95/AgentMesh agentmesh discover
+```
+Good for a look. For real work use Way 1 or 2, because the hooks that `init` writes call plain `agentmesh`.
+
 ## Why use it (in plain words)
 
 You probably have more than one AI coding CLI: some free, some paid, each with its own quota. Normally you pick one,
@@ -46,19 +96,6 @@ hit its limit, then copy your work to another by hand. AgentMesh lets all of the
 * **Fewer tokens.** `init` and `doctor` suggest token-saving tools that fit the project (RTK, caveman, CodeGraph) and
   ask you before anything is set up. The manager also gets short rules: terse replies, small diffs first, cheap checks
   always, expensive ones only when you ask.
-
-### How to start
-
-1. **Log in to each CLI once, yourself.** AgentMesh never logs in for you and never sees your credentials. Run
-   `claude`, `codex`, `kiro-cli`, ... one time each and sign in as you normally would.
-2. **Install AgentMesh once** (see [Install](#install)).
-3. **In any project:** `agentmesh init --auto`, then `agentmesh doctor`. This finds your logged-in CLIs, creates the
-   roles and workflow, and shows token-saving advice.
-4. **Open your favorite CLI** as manager (`agentmesh launch claude`, or just `claude`) and describe the work. The
-   manager plans it, hands each part to a worker, checks the result, and merges it.
-
-If a CLI is not logged in, AgentMesh treats it as unavailable and uses the next one. Add more CLIs later and run
-`agentmesh init --auto` again; your settings are kept.
 
 ## Status — read this first
 
