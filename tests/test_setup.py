@@ -142,3 +142,20 @@ def test_version_flag(capsys):
         main(["--version"])
     assert e.value.code == 0
     assert __version__ in capsys.readouterr().out
+
+
+def test_install_runs_resolved_absolute_path_not_a_bare_name(tmp_path):
+    import os
+    bindir = tmp_path / "bin"; bindir.mkdir()
+    make_script(bindir, "fakeinstaller", "exit 0")
+
+    class Inst(FakeAdapter):
+        install_argv = ("fakeinstaller", "--go")
+        install_needs = "fakeinstaller"
+    asked, said, ran, ask, say, run = session([True])
+    old = os.environ["PATH"]; os.environ["PATH"] = restricted_path(bindir)
+    try:
+        setup_mod.run_setup(reg(Inst()), ask=ask, say=say, run=run, path_env=restricted_path(tmp_path / "none"))
+    finally:
+        os.environ["PATH"] = old
+    assert ran and os.path.isabs(ran[0][0]) and ran[0][1:] == ["--go"]

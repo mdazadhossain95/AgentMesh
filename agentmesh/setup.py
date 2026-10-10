@@ -13,6 +13,7 @@ from __future__ import annotations
 
 import shutil
 import subprocess
+from pathlib import Path
 from dataclasses import dataclass
 from typing import Callable
 
@@ -68,14 +69,16 @@ def survey(registry: Registry, *, only: set[str] | None = None, path_env: str | 
 
 def _install(a: AgentAdapter, ask: Ask, say: Say, run: Run) -> bool:
     """Offer to install. True when the command ran successfully (caller re-detects the executable)."""
-    if a.install_argv and shutil.which(a.install_needs or a.install_argv[0]):
-        say(f"  install command: {' '.join(a.install_argv)}")
+    tool = shutil.which(a.install_needs or a.install_argv[0]) if a.install_argv else None
+    if a.install_argv and tool:
+        say(f"  install command: {' '.join(a.install_argv)}   (using {tool})")
         if a.install_url:
             say(f"  docs: {a.install_url}")
         if not ask(f"  Install {a.display_name or a.name} now?"):
             say("  skipped")
             return False
-        code = run(list(a.install_argv))
+        # absolute path: never let the shell/OS pick a same-named file from the current folder
+        code = run([tool, *a.install_argv[1:]])
         if code != 0:
             say(f"  install exited with code {code}")
         return code == 0
@@ -138,8 +141,8 @@ def run_setup(registry: Registry, *, ask: Ask, say: Say, run: Run, only: set[str
 
 def interactive_run(argv: list[str]) -> int:
     """Run in the user's terminal with stdio attached (installers print progress, logins open a browser)."""
-    try:
-        return subprocess.run(argv).returncode
+    try:      # from the home directory: a planted file in the current project folder is never on the search path
+        return subprocess.run(argv, cwd=Path.home()).returncode
     except OSError as e:
         print(f"  could not run {argv[0]}: {e}")
         return 127
