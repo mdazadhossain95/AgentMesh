@@ -790,6 +790,7 @@ def cmd_smoke(args: argparse.Namespace) -> int:
 
 def build_parser() -> argparse.ArgumentParser:
     p = argparse.ArgumentParser(prog="agentmesh", description="Role-based orchestration over AI coding CLIs.")
+    p.add_argument("--version", action="version", version=f"agentmesh {__version__}")
     sub = p.add_subparsers(dest="command", metavar="<command>")
 
     def add(name: str, fn: Any, help: str) -> argparse.ArgumentParser:

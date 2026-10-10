@@ -132,3 +132,13 @@ def test_builtin_login_parsers():
     assert by["opencode"].login_state(0, "0 credentials") == LOGGED_OUT
     assert by["kilo"].login_state(0, "0 credentials") == LOGGED_OUT
     assert by["opencode"].login_state(1, "error") == LOGIN_UNKNOWN
+
+
+def test_version_flag(capsys):
+    import pytest
+    from agentmesh import __version__
+    from agentmesh.cli import main
+    with pytest.raises(SystemExit) as e:
+        main(["--version"])
+    assert e.value.code == 0
+    assert __version__ in capsys.readouterr().out
