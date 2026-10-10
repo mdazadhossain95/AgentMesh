@@ -3,7 +3,7 @@ from __future__ import annotations
 import json
 
 from ..models import AgentInfo
-from .base import AgentAdapter, CommandSpec, RunContext, probe_command
+from .base import LOGGED_IN, LOGGED_OUT, LOGIN_UNKNOWN, AgentAdapter, CommandSpec, RunContext, probe_command
 
 # Kiro bills in credits (multiplier reported by `kiro-cli chat --list-models`). All of these answered a coding prompt in a
 # live test on 2026-10-07 (~6s each, mostly startup). Ordered cheapest first, coding-specific model leading; the stronger
@@ -30,6 +30,17 @@ class KiroAdapter(AgentAdapter):
     name = "kiro"
     display_name = "Kiro CLI"
     executables = ("kiro-cli",)
+    install_url = "https://kiro.dev/docs/cli/installation/"
+    install_argv = ("sh", "-c", "curl -fsSL https://cli.kiro.dev/install | bash")   # macOS/Linux, from the docs
+    install_needs = "sh"
+    status_args = ("whoami",)
+    login_args = ("login",)
+
+    def login_state(self, code, text):
+        low = text.lower()
+        if "not logged in" in low:
+            return LOGGED_OUT
+        return LOGGED_IN if "logged in" in low else LOGIN_UNKNOWN
     headless_help_args = ("chat", "--help")
     required_flags = ("--no-interactive", "--trust-tools")
     structured_flags = ("--output-format",)

@@ -1,7 +1,9 @@
 from __future__ import annotations
 
+import re
+
 from ..models import AgentInfo
-from .base import AgentAdapter, CommandSpec, RunContext, probe_command
+from .base import LOGGED_IN, LOGGED_OUT, LOGIN_UNKNOWN, AgentAdapter, CommandSpec, RunContext, probe_command
 
 
 # Ranked by a live check on 2026-10-07 (answered a coding prompt; fastest first). Ordering is a measurement of
@@ -34,6 +36,14 @@ class OpenCodeAdapter(AgentAdapter):
     name = "opencode"
     display_name = "OpenCode"
     executables = ("opencode",)
+    status_args = ("auth", "list")
+    login_args = ("auth", "login")
+
+    def login_state(self, code, text):
+        m = re.search(r"(\d+)\s+credentials?", text)
+        if code != 0 or not m:
+            return LOGIN_UNKNOWN
+        return LOGGED_IN if int(m.group(1)) > 0 else LOGGED_OUT
     headless_help_args = ("run", "--help")
     required_flags = ("--dir",)
     structured_flags = ("--format",)

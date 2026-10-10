@@ -9,6 +9,7 @@ class ClineAdapter(AgentAdapter):
     name = "cline"
     display_name = "Cline CLI"
     executables = ("cline",)
+    login_args = ("auth",)
     required_flags = ("--cwd", "--timeout")
     structured_flags = ("--json",)
     output_formats = ("json",)

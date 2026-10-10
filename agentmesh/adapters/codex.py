@@ -1,13 +1,24 @@
 from __future__ import annotations
 
 from ..models import AgentInfo
-from .base import AgentAdapter, CommandSpec, RunContext
+from .base import LOGGED_IN, LOGGED_OUT, LOGIN_UNKNOWN, AgentAdapter, CommandSpec, RunContext
 
 
 class CodexAdapter(AgentAdapter):
     name = "codex"
     display_name = "OpenAI Codex CLI"
     executables = ("codex",)
+    install_url = "https://github.com/openai/codex"
+    install_argv = ("npm", "install", "-g", "@openai/codex")
+    install_needs = "npm"
+    status_args = ("login", "status")
+    login_args = ("login",)
+
+    def login_state(self, code, text):
+        low = text.lower()
+        if "not logged in" in low:
+            return LOGGED_OUT
+        return LOGGED_IN if "logged in" in low else LOGIN_UNKNOWN
     headless_help_args = ("exec", "--help")
     required_flags = ("--sandbox", "--cd", "--output-last-message")
     structured_flags = ("--json",)

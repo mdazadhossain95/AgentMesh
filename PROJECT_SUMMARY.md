@@ -60,3 +60,15 @@ Repo public at github.com/mdazadhossain95/AgentMesh. Cross-platform (Windows loc
 * Tag release `v0.1.0` so `AGENTMESH_REF` pinning works.
 * Untested: `install.ps1` on Windows; real worker CLIs on Windows/Linux. Smoke PASSED 2026-10-10 on claude, codex, kiro, copilot, opencode (Mac).
 * Optional: kilo/opencode/antigravity benchmark re-run (spends quota, only on request), cost-aware routing, fallback on failed verify, `agentmesh adopt`, PyPI.
+
+## Update 2026-10-10 (README + agent design talk)
+* README.md rewritten short (install, use, 6 commands, edit agent, add CLI, save tokens). Old long README moved to `docs/REFERENCE.md` (uncommitted).
+* GAP found: custom roles are not supported. `ProjectConfig.roles()` iterates only generated `roles`; `overrides.roles.<new>` patches nothing; `doctor` only checks generated roles. A dev cannot add their own agent yet.
+* Research (web, 2026-10-10): subagents = Markdown + frontmatter, one narrow job each, minimal tools, no inherited CLAUDE.md context; ADLC (IBM/Salesforce/Google) = design, build, test, deploy, then observe/evaluate/monitor; token cost = cache stable prefix, short rules files, cap tool output, subagents absorb exploration.
+* Proposed (not built, awaiting user): `agentmesh role add`, stack packs (flutter/react/node/django/...), shared report-format file (saves ~250 tokens x every role file), `--adlc` workflow profile, build/release + docs roles.
+
+## Update 2026-10-10 (setup command)
+* `agentmesh setup [--check] [--only a,b] [--json]`: per CLI, offers install and login, one at a time, asks first; `--check`/no TTY only reports. Code: `agentmesh/setup.py`, `cmd_setup` in cli.py, metadata on adapters (`install_url/install_argv/install_needs/status_args/login_args/login_state`).
+* Install commands only where an official doc was seen: codex (npm @openai/codex), copilot (npm @github/copilot, Node 22+), kilo (npm @kilocode/cli), kiro (curl cli.kiro.dev/install via sh, macOS/Linux). claude: docs URL only (npm vs native installer sources conflict). opencode, cline, antigravity: no install info (not invented).
+* Login state: claude (JSON loggedIn), codex (`login status`), kiro (`whoami`), opencode/kilo (`auth list` credential count). copilot/cline/antigravity: unknown. Logged-OUT output of claude/codex/kiro never observed live (parsers unit-tested only). Status output is never printed (contains email).
+* 280 tests. Git history rewritten twice 2026-10-10 (Co-Authored-By removed, author email -> GitHub noreply); old branch `backup-before-rewrite` local only.

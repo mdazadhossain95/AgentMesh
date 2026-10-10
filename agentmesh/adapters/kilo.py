@@ -31,6 +31,9 @@ class KiloAdapter(OpenCodeAdapter):
     name = "kilo"
     display_name = "Kilo CLI"
     executables = ("kilo", "kilocode")
+    install_url = "https://kilo.ai/docs/code-with-ai/platforms/cli"
+    install_argv = ("npm", "install", "-g", "@kilocode/cli")
+    install_needs = "npm"
     notes = ("`run` has no edit-only approval flag; autonomy=full adds --auto (approve everything not denied)",
              "set workers.models.kilo to ranked ':free' models (init seeds them)")
 

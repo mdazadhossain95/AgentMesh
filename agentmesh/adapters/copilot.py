@@ -8,6 +8,10 @@ class CopilotAdapter(AgentAdapter):
     name = "copilot"
     display_name = "GitHub Copilot CLI"
     executables = ("copilot",)
+    install_url = "https://docs.github.com/en/copilot/how-tos/copilot-cli/set-up-copilot-cli/install-copilot-cli"
+    install_argv = ("npm", "install", "-g", "@github/copilot")     # needs Node.js 22+ per the docs
+    install_needs = "npm"
+    login_args = ("login",)
     required_flags = ("--prompt", "--allow-tool", "--deny-tool")
     structured_flags = ("--output-format",)
     output_formats = ("json",)

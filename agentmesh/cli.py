@@ -26,6 +26,7 @@ from .registry import Registry, build_registry
 from .roles import GLOBAL_FORBIDDEN
 from .runner import Runner, check_depth
 from .state import RuntimeState
+from . import setup as setup_mod
 from .task_manager import TaskManager
 from . import risk as risk_mod
 from .workflow import REVIEW_ROLES, plan_task
@@ -118,6 +119,36 @@ def cmd_discover(args: argparse.Namespace) -> int:
         out("Not installed: " + ", ".join(missing))
     for u in rep.unknown:
         out(f"\nUnknown compatible CLI: {u.name}\n  Detected: {u.path}\n  Adapter: REQUIRED (see `agentmesh configure add-agent`)")
+    return 0
+
+
+def cmd_setup(args: argparse.Namespace) -> int:
+    registry = build_registry()
+    only = {n.strip() for n in args.only.split(",") if n.strip()} if args.only else None
+    interactive = sys.stdin.isatty() and sys.stdout.isatty() and not args.check
+
+    def ask(question: str) -> bool:
+        try:
+            return input(f"{question} [y/N] ").strip().lower() in ("y", "yes")
+        except EOFError:
+            return False
+
+    if not interactive:
+        rows = setup_mod.survey(registry, only=only)
+        if args.json:
+            out(json.dumps([r.__dict__ for r in rows], indent=2))
+            return 0
+        out("Coding CLIs (no changes made)\n")
+        for r in rows:
+            out(f"  {r.display:<28} " + ("not installed" if not r.installed else f"installed, login: {r.login}"))
+        if any(not r.installed or r.login != "logged-in" for r in rows):
+            out("\nRun `agentmesh setup` in a terminal to install or log in, one CLI at a time.")
+        return 0
+    out("AgentMesh setup: each step asks first. Press Enter to skip.\n")
+    rows = setup_mod.run_setup(registry, ask=ask, say=out, run=setup_mod.interactive_run, only=only)
+    discovery.save_cache(discovery.discover(registry))      # new installs show up in later commands
+    ready = [r.display for r in rows if r.installed and r.login == "logged-in"]
+    out("\nReady: " + (", ".join(ready) if ready else "none yet") + "\nOne logged-in CLI is enough to start: `agentmesh init --auto`.")
     return 0
 
 
@@ -836,6 +867,9 @@ def build_parser() -> argparse.ArgumentParser:
     sp.add_argument("--headless-arg", action="append"); sp.add_argument("--edit-arg", action="append")
     sp.add_argument("--full-arg", action="append"); sp.add_argument("--continue-arg", action="append")
     sp.add_argument("--stdin-prompt", action="store_true")
+    sp = add("setup", cmd_setup, "install missing CLIs and log in, one at a time (asks before each step)")
+    sp.add_argument("--only", help="comma list, e.g. codex,kiro"); sp.add_argument("--check", action="store_true", help="only report, never ask")
+    sp.add_argument("--json", action="store_true", help="with --check or no terminal: machine-readable report")
     sp = add("benchmark", cmd_benchmark, "LIVE: score every worker/model on hidden-test coding tasks (uses quota)")
     sp.add_argument("--yes", action="store_true"); sp.add_argument("--apply", action="store_true", help="write measured model chains + quality_order into project.yaml")
     sp.add_argument("--quick", action="store_true", help="cheap check: 2 easy tasks, each CLI's default model only")

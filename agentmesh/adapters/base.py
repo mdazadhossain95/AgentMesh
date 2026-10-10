@@ -28,6 +28,9 @@ _LONG_FLAG = re.compile(r"(?<![\w-])--[A-Za-z0-9][\w-]*")
 _SHORT_FLAG = re.compile(r"(?<![\w-])-[A-Za-z](?![\w-])")
 
 
+LOGGED_IN, LOGGED_OUT, LOGIN_UNKNOWN = "logged-in", "logged-out", "unknown"
+
+
 def parse_flags(help_text: str) -> list[str]:
     found = set(_LONG_FLAG.findall(help_text)) | set(_SHORT_FLAG.findall(help_text))
     return sorted(found)
@@ -109,6 +112,17 @@ class AgentAdapter(ABC):
     cwd_flag: str | None = None
     timeout_flag: str | None = None
     notes: tuple[str, ...] = ()
+    # ---- setup metadata, used by `agentmesh setup`. Only values confirmed from the CLI's own --help or its
+    # official docs; None means "unknown", never a guess. ----
+    install_url: str | None = None                 # official install page, shown when no safe command is known
+    install_argv: tuple[str, ...] | None = None    # run only after the user confirms
+    install_needs: str | None = None               # executable the install command needs on PATH (npm, sh)
+    status_args: tuple[str, ...] | None = None     # free command that reports login state (no model call)
+    login_args: tuple[str, ...] | None = None      # interactive login, run in the user's terminal
+
+    def login_state(self, code: int | None, text: str) -> str:
+        """LOGGED_IN | LOGGED_OUT | UNKNOWN from the output of `status_args`."""
+        return LOGIN_UNKNOWN
 
     def __init__(self) -> None:
         self._procs: dict[str, subprocess.Popen[str]] = {}

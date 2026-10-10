@@ -1,16 +1,25 @@
 from __future__ import annotations
 
+import re
+
 import json
 
 from ..models import AgentInfo
 from ..security import redact
-from .base import AgentAdapter, CommandSpec, Normalized, RawResult, RunContext
+from .base import LOGGED_IN, LOGGED_OUT, LOGIN_UNKNOWN, AgentAdapter, CommandSpec, Normalized, RawResult, RunContext
 
 
 class ClaudeAdapter(AgentAdapter):
     name = "claude"
     display_name = "Claude Code"
     executables = ("claude",)
+    install_url = "https://docs.anthropic.com/en/docs/claude-code/setup"
+    status_args = ("auth", "status")
+    login_args = ("auth", "login")
+
+    def login_state(self, code, text):
+        m = re.search(r'"loggedIn"\s*:\s*(true|false)', text)
+        return (LOGGED_IN if m.group(1) == "true" else LOGGED_OUT) if m else LOGIN_UNKNOWN
     required_flags = ("-p", "--print", "--output-format")
     structured_flags = ("--output-format",)
     output_formats = ("json", "stream-json")
