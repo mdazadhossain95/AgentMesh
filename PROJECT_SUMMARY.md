@@ -72,3 +72,8 @@ Repo public at github.com/mdazadhossain95/AgentMesh. Cross-platform (Windows loc
 * Install commands only where an official doc was seen: codex (npm @openai/codex), copilot (npm @github/copilot, Node 22+), kilo (npm @kilocode/cli), kiro (curl cli.kiro.dev/install via sh, macOS/Linux). claude: docs URL only (npm vs native installer sources conflict). opencode, cline, antigravity: no install info (not invented).
 * Login state: claude (JSON loggedIn), codex (`login status`), kiro (`whoami`), opencode/kilo (`auth list` credential count). copilot/cline/antigravity: unknown. Logged-OUT output of claude/codex/kiro never observed live (parsers unit-tested only). Status output is never printed (contains email).
 * 280 tests. Git history rewritten twice 2026-10-10 (Co-Authored-By removed, author email -> GitHub noreply); old branch `backup-before-rewrite` local only.
+
+## Update 2026-10-14 (open-source readiness)
+* Added (local commit, NOT pushed): `.github/ISSUE_TEMPLATE/{bug_report,new_cli,config.yml}`, `pull_request_template.md`, `CODE_OF_CONDUCT.md`, `SECURITY.md`, `docs/ARCHITECTURE.md`, README Contributing section, CONTRIBUTING intro.
+* Found: `~/.agentmesh/discovery.json` was stale (all NOT_INSTALLED); `agentmesh discover` fixed it. Tests: 282.
+* Still needs owner OK (public): push, repo description/topics, v0.1.0 release, branch protection, labels (`adapter`, `good first issue`, `bug`) + starter issues, PyPI.

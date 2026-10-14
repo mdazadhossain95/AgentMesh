@@ -1,5 +1,10 @@
 # Contributing
 
+All contributions are welcome: code, docs, bug reports, or testing on another OS.
+Fork, branch, open a PR. CI must be green. The maintainer reviews and merges; nothing lands without review.
+Not sure where to start? See `docs/ARCHITECTURE.md` ("Add a new AI CLI", "Other good first contributions").
+By contributing you agree your work is released under the MIT license. See `CODE_OF_CONDUCT.md`; security issues: `SECURITY.md`.
+
 ```bash
 uv venv && uv pip install -e '.[dev]'
 .venv/bin/python -m pytest          # must stay green, offline, free

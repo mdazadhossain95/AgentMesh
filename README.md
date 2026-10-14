@@ -122,6 +122,12 @@ Need parsing or special errors? Write a small adapter class: see [CONTRIBUTING.m
 Copilot and OpenCode (macOS). Not verified: real worker CLIs on Windows and Linux, `install.ps1`. This is an early
 version. Details and known limits: [docs/REFERENCE.md](docs/REFERENCE.md).
 
+## Contributing
+
+Help is welcome, and you do not need to be an expert. Easiest first steps: add support for a new AI CLI,
+test on Windows or Linux, or fix a doc. Start with [CONTRIBUTING.md](CONTRIBUTING.md) and
+[docs/ARCHITECTURE.md](docs/ARCHITECTURE.md). Security issues: [SECURITY.md](SECURITY.md).
+
 ## License
 
 MIT
