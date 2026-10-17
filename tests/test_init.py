@@ -181,6 +181,24 @@ def test_skill_catalogs_opt_in_and_filtered_to_stack(flutter_only, tmp_path, mon
     rep = init_with(flutter_only, REG())
     assert ProjectConfig.load(flutter_only).get("skill_catalogs") == [str(catalog)]
 
+    # --no-skills skips indexing for this run but keeps the saved choice for next time
+    rep = init_with(flutter_only, REG(), skills=False)
+    assert ".agentmesh/references/skills-index.md" not in rep.actions
+    assert ProjectConfig.load(flutter_only).get("skill_catalogs") == [str(catalog)]
+
+
+def test_untrusted_skill_catalogs_in_project_yaml_are_dropped(flutter_only, tmp_path):
+    p = flutter_only / ".agentmesh" / "project.yaml"
+    init_with(flutter_only, REG())                                  # create the project first
+    data = load_yaml(p)
+    evil = str(tmp_path / "evil-local-path")                        # not in DEFAULT_SKILL_CATALOGS
+    data["skill_catalogs"] = [evil]
+    p.write_text(dump_yaml(data))
+
+    rep = init_with(flutter_only, REG())
+    assert ".agentmesh/references/skills-index.md" not in rep.actions
+    assert ProjectConfig.load(flutter_only).get("skill_catalogs") == []   # dropped, never resolved
+
 
 def test_manager_choice_is_recorded_and_gets_instructions(flutter_only):
     init_with(flutter_only, REG(), manager="codex")

@@ -124,16 +124,18 @@ def init_project(root: Path, registry: Registry, *, asker: Asker | None = None, 
         ref_notes = "`.agentmesh/references/index.md` (methodology reference; project-specific rules in it do not apply)"
 
     # ---- skill catalogs (opt-in via `skills=True`; the CLI asks interactively before calling in here)
-    skill_catalogs = list(existing.get("skill_catalogs") or [])
+    # project.yaml is shared, reviewable config, not a safe source of arbitrary git-clone/local-path
+    # targets -- only ever resolve catalogs from the fixed default allowlist, never a raw config value.
+    skill_catalogs = [u for u in (existing.get("skill_catalogs") or []) if u in DEFAULT_SKILL_CATALOGS]
     if skills is None and not skill_catalogs:
         profile.assumptions.append("assumed skill_catalogs=skip (not interactive / not asked): index default skill catalogs for this stack?")
     elif skills and not skill_catalogs:
         skill_catalogs = list(DEFAULT_SKILL_CATALOGS)
-    if skill_catalogs:
+    active_catalogs = [] if skills is False else skill_catalogs     # --no-skills skips this run without forgetting the saved choice
+    if active_catalogs and not dry_run:
         kw = profile_keywords(profile.components)
-        if not dry_run:
-            paths.references_dir.mkdir(parents=True, exist_ok=True)
-        sections = [build_index(resolve_reference(u, paths), u, keywords=kw) for u in skill_catalogs]
+        paths.references_dir.mkdir(parents=True, exist_ok=True)
+        sections = [build_index(resolve_reference(u, paths), u, keywords=kw) for u in active_catalogs]
         act[".agentmesh/references/skills-index.md"] = fsutil.write_generated(
             paths.references_dir / "skills-index.md",
             "# Skill catalog index (auto-filtered to this project's stack)\n\n" + "\n".join(sections), "md", dry_run)
