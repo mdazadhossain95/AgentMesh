@@ -14,7 +14,7 @@ from .errors import ProjectError
 from .project_analyzer import ProjectProfile, analyze, apply_answers
 from .reference import build_index, resolve_reference
 from .registry import Registry
-from .roles import custom_spec, render_role, role_policy, select_roles
+from .roles import ROLE_NAME_RE, custom_spec, render_role, role_policy, select_roles
 from .workflow import generate_workflow
 
 Asker = Callable[[str, list[str], str], str]
@@ -103,7 +103,7 @@ def init_project(root: Path, registry: Registry, *, asker: Asker | None = None, 
     ready = [a.name for a in rep.agents if a.ready]
     mgr = _pick_manager(manager, (existing.get("manager") or {}).get("default"), ready, registry)
     roles = select_roles(profile)
-    custom = existing.get("custom_roles") or {}
+    custom = {r: v for r, v in (existing.get("custom_roles") or {}).items() if ROLE_NAME_RE.match(r)}
     roles += [r for r in custom if r not in roles]
     out = InitReport(profile, roles, mgr, asked=asked, assumptions=profile.assumptions, ready_workers=ready)
     act = out.actions

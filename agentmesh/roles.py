@@ -6,10 +6,13 @@ No domain rules are copied; every project rule below is derived from what the an
 """
 from __future__ import annotations
 
+import re
 from dataclasses import dataclass, field
 from typing import Any
 
 from .project_analyzer import Component, ProjectProfile
+
+ROLE_NAME_RE = re.compile(r"^[a-z0-9][a-z0-9-]{0,63}$")
 
 ENGINEERS = ("app-engineer", "frontend-engineer", "backend-engineer", "software-engineer")
 GLOBAL_FORBIDDEN = [".git/**", ".env", ".env.*", "**/.env", "**/.env.*", "**/*.pem", "**/*.p12", "**/*.jks",

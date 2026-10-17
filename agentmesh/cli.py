@@ -23,7 +23,7 @@ from .health import run_doctor
 from .initializer import init_project, tty_asker
 from .models import Task, TaskStatus, utcnow, WorkerResult
 from .registry import Registry, build_registry
-from .roles import GLOBAL_FORBIDDEN
+from .roles import GLOBAL_FORBIDDEN, ROLE_NAME_RE
 from .runner import Runner, check_depth
 from .state import RuntimeState
 from . import setup as setup_mod
@@ -706,6 +706,9 @@ def cmd_role(args: argparse.Namespace) -> int:
     if not args.name or not args.purpose:
         raise AgentMeshError("usage: role add NAME --purpose TEXT [--title TEXT] [--capability write|read-only] "
                              "[--paths GLOB,GLOB] [--handoff ROLE,ROLE] [--isolation worktree|inplace]")
+    if not ROLE_NAME_RE.match(args.name):
+        raise AgentMeshError(f"invalid role name '{args.name}': use lowercase letters, digits, hyphens only "
+                             "(no '/', '.', or leading hyphen) — it becomes a filename")
     raw = load_yaml(cfg.paths.project_yaml)
     raw.setdefault("custom_roles", {})[args.name] = {
         "title": args.title or args.name, "purpose": args.purpose, "capability": args.capability,

@@ -193,6 +193,30 @@ def test_role_add_requires_name_and_purpose(project, capsys):
     assert code == 1 and "usage: role add" in err
 
 
+def test_role_add_rejects_path_traversal_name(project, capsys):
+    code, _, err = run(capsys, "role", "add", "../../etc/evil", "--purpose", "x")
+    assert code == 1 and "invalid role name" in err
+    assert load_yaml(project / ".agentmesh" / "project.yaml").get("custom_roles") == {}
+
+
+def test_role_add_rejects_slash_and_dot_names(project, capsys):
+    for bad in ("app/engineer", "..", ".hidden", "UPPER"):
+        code, _, err = run(capsys, "role", "add", bad, "--purpose", "x")
+        assert code == 1 and "invalid role name" in err
+
+
+def test_init_ignores_hand_edited_custom_role_with_traversal_name(project, capsys):
+    """A hand-edited project.yaml (not via `role add`) could still carry an unsafe key;
+    init must never turn it into a filename outside .agentmesh/agents/."""
+    raw = load_yaml(project / ".agentmesh" / "project.yaml")
+    raw.setdefault("custom_roles", {})["../../escaped"] = {"purpose": "x"}
+    (project / ".agentmesh" / "project.yaml").write_text(dump_yaml(raw), encoding="utf-8")
+    code, _, _ = run(capsys, "init", "--auto", "--yes")
+    assert code == 0
+    assert not (project / ".agentmesh" / "agents" / "escaped.md").is_file()
+    assert not (project.parent / "escaped.md").is_file()
+
+
 def test_role_add_overwrites_on_rerun(project, capsys):
     run(capsys, "role", "add", "docs-writer", "--purpose", "first", "--paths", "docs/**")
     run(capsys, "role", "add", "docs-writer", "--purpose", "second", "--paths", "README.md")
