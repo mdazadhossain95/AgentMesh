@@ -1,7 +1,9 @@
 """Optional reference material (local folder or git URL). Indexed and linked, never blindly copied."""
 from __future__ import annotations
 
+import hashlib
 import re
+import shutil
 import subprocess
 from pathlib import Path
 
@@ -31,9 +33,19 @@ def profile_keywords(components: list) -> list[str]:
     return sorted(kw)
 
 
+def _origin_matches(repo: Path, ref: str) -> bool:
+    r = subprocess.run(["git", "-C", str(repo), "remote", "get-url", "origin"], capture_output=True, text=True)
+    norm = lambda u: u.strip().rstrip("/").removesuffix(".git")
+    return r.returncode == 0 and norm(r.stdout) == norm(ref)
+
+
 def resolve_reference(ref: str, paths: ProjectPaths) -> Path:
     if _URL.match(ref):
-        target = paths.runtime_dir / "references" / re.sub(r"[^A-Za-z0-9._-]", "_", ref.rstrip("/").split("/")[-1].removesuffix(".git"))
+        name = re.sub(r"[^A-Za-z0-9._-]", "_", ref.rstrip("/").split("/")[-1].removesuffix(".git"))
+        digest = hashlib.sha256(ref.encode()).hexdigest()[:16]        # full URL, not just its last segment: two
+        target = paths.runtime_dir / "references" / f"{digest}-{name}"  # different repos sharing a name must not collide
+        if target.exists() and not _origin_matches(target, ref):
+            shutil.rmtree(target)
         if not target.exists():
             target.parent.mkdir(parents=True, exist_ok=True)
             r = subprocess.run(["git", "clone", "--depth", "1", ref, str(target)], capture_output=True, text=True)
