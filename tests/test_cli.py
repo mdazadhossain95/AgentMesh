@@ -5,6 +5,7 @@ import pytest
 from conftest import commit_all, git, make_script, write, restricted_path
 from agentmesh import __version__
 from agentmesh.cli import main
+from agentmesh.config import dump_yaml, load_yaml
 
 
 @pytest.fixture
@@ -174,6 +175,75 @@ def test_configure_add_agent_registers_generic_cli(capsys, home, tmp_path, monke
     data = json.loads(run(capsys, "discover", "--json")[1])
     mt = next(a for a in data["agents"] if a["name"] == "mytool")
     assert mt["installed"] and mt["state"] == "READY" and mt["version"] == "3.1"
+
+
+def test_role_add_generates_agent_file_on_next_init(project, capsys):
+    code, out, _ = run(capsys, "role", "add", "docs-writer", "--purpose", "Keep docs in sync", "--paths", "docs/**,*.md")
+    assert code == 0 and "docs-writer" in out
+    code, out, _ = run(capsys, "init", "--auto", "--yes")
+    assert code == 0 and "created" in out and "docs-writer.md" in out
+    md = (project / ".agentmesh" / "agents" / "docs-writer.md").read_text(encoding="utf-8")
+    assert "Keep docs in sync" in md and "docs/**" in md
+    code, out, _ = run(capsys, "role", "list")
+    assert code == 0 and "docs-writer (custom)" in out and "app-engineer (built-in)" in out
+
+
+def test_role_add_requires_name_and_purpose(project, capsys):
+    code, _, err = run(capsys, "role", "add")
+    assert code == 1 and "usage: role add" in err
+
+
+def test_role_add_overwrites_on_rerun(project, capsys):
+    run(capsys, "role", "add", "docs-writer", "--purpose", "first", "--paths", "docs/**")
+    run(capsys, "role", "add", "docs-writer", "--purpose", "second", "--paths", "README.md")
+    run(capsys, "init", "--auto", "--yes")
+    md = (project / ".agentmesh" / "agents" / "docs-writer.md").read_text(encoding="utf-8")
+    assert "second" in md and "first" not in md and "README.md" in md
+
+
+def test_role_add_same_name_as_builtin_overrides_the_builtin(project, capsys):
+    run(capsys, "role", "add", "reviewer", "--purpose", "custom reviewer behaviour", "--capability", "read-only")
+    code, out, _ = run(capsys, "init", "--auto", "--yes")
+    assert code == 0
+    md = (project / ".agentmesh" / "agents" / "reviewer.md").read_text(encoding="utf-8")
+    assert "custom reviewer behaviour" in md                       # custom_roles wins over the generated spec
+
+
+def test_role_add_read_only_ignores_paths(project, capsys):
+    run(capsys, "role", "add", "auditor", "--purpose", "read the code", "--capability", "read-only", "--paths", "lib/**")
+    run(capsys, "init", "--auto", "--yes")
+    data = load_yaml(project / ".agentmesh" / "project.yaml")
+    assert data["roles"]["auditor"]["capability"] == "read-only"
+    assert data["roles"]["auditor"]["allowed_paths"] == []          # read-only never gets write access regardless of --paths
+
+
+def test_role_add_cannot_bypass_forbidden_paths_via_broad_glob(project, capsys):
+    run(capsys, "role", "add", "wide-open", "--purpose", "test", "--paths", "**")
+    run(capsys, "init", "--auto", "--yes")
+    data = load_yaml(project / ".agentmesh" / "project.yaml")
+    forbidden = data["roles"]["wide-open"]["forbidden_paths"]
+    assert ".env" in forbidden and "**/*.pem" in forbidden           # GLOBAL_FORBIDDEN always applies, custom paths can't opt out
+
+
+def test_role_add_tolerates_hand_edited_project_yaml_missing_fields(project, capsys):
+    p = project / ".agentmesh" / "project.yaml"
+    data = load_yaml(p)
+    data.setdefault("custom_roles", {})["sparse"] = {}               # no title/purpose/capability at all
+    p.write_text(dump_yaml(data))
+    code, out, _ = run(capsys, "init", "--auto", "--yes")
+    assert code == 0 and "sparse.md" in out                          # custom_spec defaults fill the gaps, init does not crash
+
+
+def test_decide_edit_suggests_a_custom_write_role(project, capsys):
+    from agentmesh import enforcement
+    from agentmesh.config import ProjectConfig
+    # "docs/**" and "**/*.md" are in DEFAULT_ALLOW (never reach suggest_role); "assets/**" is already app-engineer's
+    # (flutter's _paths() claims it) so use a path no built-in role owns on a flutter-only project.
+    run(capsys, "role", "add", "marketing-writer", "--purpose", "manage marketing copy", "--paths", "marketing/**")
+    run(capsys, "init", "--auto", "--yes")
+    cfg = ProjectConfig.load(project)
+    d = enforcement.decide_edit(cfg, str(project / "marketing" / "banner.txt"))
+    assert not d.allow and "--role marketing-writer" in d.message
 
 
 def test_clean(project, capsys):

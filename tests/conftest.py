@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 import os
 import shutil
 import stat
@@ -116,6 +117,76 @@ def flutter_backend(tmp_path) -> Path:
     write(root, "backend/tests/test_x.py", "")
     write(root, "docs/openapi.yaml", "openapi: 3.0.0\n")
     write(root, "CLAUDE.md", "# Human rules\nBe careful.\n")
+    git(root, "init", "-q", "-b", "main")
+    commit_all(root)
+    return root
+
+
+@pytest.fixture
+def android_native(tmp_path) -> Path:
+    """Standalone native Android app (no Flutter): root build.gradle + app/build.gradle with the Android plugin."""
+    root = tmp_path / "androidapp"
+    write(root, "build.gradle", "allprojects {\n    repositories { google(); mavenCentral() }\n}\n")
+    write(root, "settings.gradle", "include ':app'\n")
+    write(root, "gradlew", "#!/bin/sh\necho gradle\n")
+    write(root, "app/build.gradle",
+          "plugins {\n    id 'com.android.application'\n    id 'org.jetbrains.kotlin.android'\n}\n"
+          "dependencies {\n    implementation 'androidx.core:core-ktx:1.13.0'\n}\n")
+    write(root, "app/src/main/java/com/example/app/MainActivity.kt", "class MainActivity\n")
+    write(root, "app/src/test/java/com/example/app/ExampleTest.kt", "class ExampleTest\n")
+    git(root, "init", "-q", "-b", "main")
+    commit_all(root)
+    return root
+
+
+@pytest.fixture
+def react_web(tmp_path) -> Path:
+    """React + Vite single-page app, no backend."""
+    root = tmp_path / "reactapp"
+    write(root, "package.json", json.dumps({
+        "name": "reactapp", "private": True,
+        "scripts": {"dev": "vite", "build": "vite build", "test": "vitest"},
+        "dependencies": {"react": "^18.3.0", "react-dom": "^18.3.0"},
+        "devDependencies": {"vite": "^5.4.0", "vitest": "^2.1.0", "typescript": "^5.6.0"},
+    }))
+    write(root, "tsconfig.json", "{}\n")
+    write(root, "src/App.tsx", "export default function App() { return null }\n")
+    write(root, "src/App.test.tsx", "")
+    git(root, "init", "-q", "-b", "main")
+    commit_all(root)
+    return root
+
+
+@pytest.fixture
+def node_backend(tmp_path) -> Path:
+    """Express API, no frontend."""
+    root = tmp_path / "nodeapi"
+    write(root, "package.json", json.dumps({
+        "name": "nodeapi", "private": True,
+        "scripts": {"start": "node src/server.js", "test": "jest"},
+        "dependencies": {"express": "^4.21.0", "pg": "^8.13.0"},
+        "devDependencies": {"jest": "^29.7.0"},
+    }))
+    write(root, "src/server.js", "const express = require('express');\n")
+    write(root, "src/server.test.js", "")
+    git(root, "init", "-q", "-b", "main")
+    commit_all(root)
+    return root
+
+
+@pytest.fixture
+def ios_native(tmp_path) -> Path:
+    """Standalone native iOS app (Xcode project + CocoaPods, no Flutter/React Native).
+
+    AgentMesh's analyzer has no detector for Podfile/.xcodeproj today: this fixture
+    documents that gap (see test_multi_stack.py) rather than hiding it.
+    """
+    root = tmp_path / "iosapp"
+    write(root, "Podfile", "platform :ios, '16.0'\ntarget 'iosapp' do\nend\n")
+    (root / "iosapp.xcodeproj").mkdir(parents=True)
+    write(root, "iosapp.xcodeproj/project.pbxproj", "// Xcode project\n")
+    write(root, "iosapp/AppDelegate.swift", "import UIKit\n")
+    write(root, "iosappTests/AppDelegateTests.swift", "import XCTest\n")
     git(root, "init", "-q", "-b", "main")
     commit_all(root)
     return root

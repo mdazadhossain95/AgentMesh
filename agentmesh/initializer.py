@@ -14,7 +14,7 @@ from .errors import ProjectError
 from .project_analyzer import ProjectProfile, analyze, apply_answers
 from .reference import build_index, resolve_reference
 from .registry import Registry
-from .roles import render_role, role_policy, select_roles
+from .roles import custom_spec, render_role, role_policy, select_roles
 from .workflow import generate_workflow
 
 Asker = Callable[[str, list[str], str], str]
@@ -103,6 +103,8 @@ def init_project(root: Path, registry: Registry, *, asker: Asker | None = None, 
     ready = [a.name for a in rep.agents if a.ready]
     mgr = _pick_manager(manager, (existing.get("manager") or {}).get("default"), ready, registry)
     roles = select_roles(profile)
+    custom = existing.get("custom_roles") or {}
+    roles += [r for r in custom if r not in roles]
     out = InitReport(profile, roles, mgr, asked=asked, assumptions=profile.assumptions, ready_workers=ready)
     act = out.actions
 
@@ -123,8 +125,9 @@ def init_project(root: Path, registry: Registry, *, asker: Asker | None = None, 
 
     # ---- role files
     for role in roles:
+        spec = custom_spec(role, custom[role], profile) if role in custom else None
         act[f".agentmesh/agents/{role}.md"] = fsutil.write_generated(
-            paths.agents_dir / f"{role}.md", render_role(role, profile, ref_notes), "md", dry_run)
+            paths.agents_dir / f"{role}.md", render_role(role, profile, ref_notes, spec=spec), "md", dry_run)
     if paths.agents_dir.is_dir():
         for f in sorted(paths.agents_dir.glob("*.md")):
             if f.stem not in roles and fsutil.split_stamp(f.read_text(encoding="utf-8"))[0]:
@@ -162,7 +165,7 @@ def init_project(root: Path, registry: Registry, *, asker: Asker | None = None, 
         "project": {"name": profile.name, "kind": profile.kind, "git": profile.is_git,
                     "assumptions": profile.assumptions, "answers": asked},
         "detected": _detected_block(profile),
-        "roles": {r: role_policy(r, profile) for r in roles},
+        "roles": {r: role_policy(r, profile, spec=(custom_spec(r, custom[r], profile) if r in custom else None)) for r in roles},
         "verification": {"commands": commands},
         **human,
     }

@@ -402,6 +402,8 @@ def cmd_hook(args: argparse.Namespace) -> int:
             if msg:
                 err(msg)
                 return 2
+            if enforcement.current_depth() == 0:          # nested worker sessions finish too; only the manager's end is a session
+                enforcement.append_ledger(cfg)
             return 0
         if args.event == "session-start":
             if enforcement.mode(cfg) != "off" and enforcement.current_depth() == 0:
@@ -694,6 +696,27 @@ def cmd_configure(args: argparse.Namespace) -> int:
     return 0
 
 
+def cmd_role(args: argparse.Namespace) -> int:
+    cfg = _project(args)
+    if args.action == "list":
+        custom = cfg.get("custom_roles", {}) or {}
+        for r in cfg.get("roles", {}) or {}:
+            out(f"{r} ({'custom' if r in custom else 'built-in'})")
+        return 0
+    if not args.name or not args.purpose:
+        raise AgentMeshError("usage: role add NAME --purpose TEXT [--title TEXT] [--capability write|read-only] "
+                             "[--paths GLOB,GLOB] [--handoff ROLE,ROLE] [--isolation worktree|inplace]")
+    raw = load_yaml(cfg.paths.project_yaml)
+    raw.setdefault("custom_roles", {})[args.name] = {
+        "title": args.title or args.name, "purpose": args.purpose, "capability": args.capability,
+        "allowed_paths": args.paths.split(",") if args.paths else [],
+        "handoff_to": args.handoff.split(",") if args.handoff else [], "isolation": args.isolation,
+    }
+    cfg.paths.project_yaml.write_text(dump_yaml(raw), encoding="utf-8")
+    out(f"added custom role '{args.name}' to {cfg.paths.project_yaml}. Run `agentmesh init` to generate its agent file.")
+    return 0
+
+
 def cmd_benchmark(args: argparse.Namespace) -> int:
     """LIVE: measure each worker/model on the same coding tasks (hidden unit tests). Uses quota/credits."""
     from . import benchmark as bm
@@ -868,6 +891,14 @@ def build_parser() -> argparse.ArgumentParser:
     sp.add_argument("--headless-arg", action="append"); sp.add_argument("--edit-arg", action="append")
     sp.add_argument("--full-arg", action="append"); sp.add_argument("--continue-arg", action="append")
     sp.add_argument("--stdin-prompt", action="store_true")
+    sp = add("role", cmd_role, "add a custom role the project scanner would not detect on its own")
+    sp.add_argument("action", choices=["add", "list"])
+    sp.add_argument("name", nargs="?")
+    sp.add_argument("--title"); sp.add_argument("--purpose")
+    sp.add_argument("--capability", choices=["write", "read-only"], default="write")
+    sp.add_argument("--paths", help="comma list of allowed path globs (write roles)")
+    sp.add_argument("--handoff", help="comma list of role names this role may hand off to")
+    sp.add_argument("--isolation", choices=["worktree", "inplace"], default="worktree")
     sp = add("setup", cmd_setup, "install missing CLIs and log in, one at a time (asks before each step)")
     sp.add_argument("--only", help="comma list, e.g. codex,kiro"); sp.add_argument("--check", action="store_true", help="only report, never ask")
     sp.add_argument("--json", action="store_true", help="with --check or no terminal: machine-readable report")

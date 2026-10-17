@@ -189,6 +189,72 @@ def test_init_installs_hooks_unless_enforcement_off(flutter_only, tmp_path):
     assert ".claude/settings.json" not in init_with(off, mock_registry({"w1": "SUCCESS"})).actions or True
 
 
+def test_append_ledger_is_noop_without_tasks(proj):
+    enforcement.append_ledger(proj)
+    assert not enforcement.ledger_path(proj).exists()
+
+
+def test_append_ledger_writes_a_mechanical_line(proj):
+    from agentmesh.models import TaskStatus
+    new_task(proj, status=TaskStatus.INTEGRATED.value)
+    enforcement.append_ledger(proj)
+    path = enforcement.ledger_path(proj)
+    assert path.is_file()
+    lines = enforcement.recent_ledger(proj, n=100)
+    assert len(lines) == 1 and "1 task(s) total, 1 integrated" in lines[0] and "app-engineer" in lines[0]
+
+
+def test_append_ledger_rotation_drops_oldest_keeps_newest(proj):
+    path = enforcement.ledger_path(proj)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text("\n".join(enforcement.LEDGER_HEADER + [f"- old-{i}" for i in range(200)]) + "\n", encoding="utf-8")
+    new_task(proj)
+    enforcement.append_ledger(proj)
+    lines = enforcement.recent_ledger(proj, n=1000)
+    assert len(lines) == 200
+    assert lines[0] == "- old-1" and "old-0" not in lines          # first (oldest) entry dropped
+    assert "app-engineer" in lines[-1]                              # newest entry kept at the end
+
+
+def test_recent_ledger_ignores_junk_lines_and_short_history(proj):
+    path = enforcement.ledger_path(proj)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text("# not an entry\nsome human note\n- a real one\n", encoding="utf-8")
+    assert enforcement.recent_ledger(proj, n=5) == ["- a real one"]
+    assert enforcement.recent_ledger(proj, n=1) == ["- a real one"]
+
+
+def test_session_summary_includes_recent_ledger_lines(proj):
+    new_task(proj)
+    enforcement.append_ledger(proj)
+    assert "Recent sessions" in enforcement.session_summary(proj)
+
+
+def test_stop_hook_does_not_write_ledger_while_tasks_are_pending(flutter_backend, monkeypatch, capsys):
+    reg = mock_registry({"w1": "SUCCESS"}, w1={"writes": {"lib/a.dart": "a"}})
+    runner, cfg = make_runner(flutter_backend, reg, {"routing": {"strategy": "preferred-order", "preferred_order": ["w1"]}})
+    commit_all(flutter_backend, "init")
+    monkeypatch.chdir(flutter_backend)
+    payload = {"cwd": str(flutter_backend)}
+    r = runner.run(new_task(cfg))
+    assert r.status == "SUCCESS"
+    assert hook(monkeypatch, capsys, "stop", payload)[0] == 2            # unverified -> blocked
+    assert not enforcement.ledger_path(cfg).exists()                    # blocked finish writes no memory
+    assert main(["verify", r.task_id, "--accept", "checked"]) == 0
+    capsys.readouterr()
+    assert hook(monkeypatch, capsys, "stop", payload)[0] == 0            # now a clean finish
+    assert "1 task(s) total" in enforcement.recent_ledger(cfg)[-1]
+
+
+def test_stop_hook_does_not_write_ledger_for_nested_worker_sessions(flutter_backend, monkeypatch, capsys):
+    reg = mock_registry({"w1": "SUCCESS"}, w1={"writes": {"lib/a.dart": "a"}})
+    runner, cfg = make_runner(flutter_backend, reg)
+    runner.run(new_task(cfg))                                            # leaves a verified-pending task behind
+    monkeypatch.setenv("AGENTMESH_DEPTH", "1")                           # this stop hook fires inside a worker's own session
+    assert hook(monkeypatch, capsys, "stop", {"cwd": str(flutter_backend)})[0] == 0
+    assert not enforcement.ledger_path(cfg).exists()                     # not the manager's session ending -> no memory write
+
+
 def test_dotfile_patterns_match_at_the_repo_root():
     from agentmesh.roles import GLOBAL_FORBIDDEN
     from agentmesh.scope import matches

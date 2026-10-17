@@ -111,6 +111,37 @@ def audit(cfg: ProjectConfig) -> list[str]:
     return [f for f in gitutil.dirty_files(cfg.paths.root, ignore) if not matches(f, allow)]
 
 
+LEDGER_HEADER = ["# AgentMesh session ledger", "",
+                 "One line per clean finish (`agentmesh hook stop` with nothing left pending). Edit or delete freely.", ""]
+
+
+def ledger_path(cfg: ProjectConfig) -> Path:
+    return cfg.paths.mesh / "memory" / "STATE_LEDGER.md"
+
+
+def append_ledger(cfg: ProjectConfig) -> None:
+    """Mechanical, no-LLM session note: written only when the Stop hook finds nothing pending (a clean finish)."""
+    tasks = TaskManager(cfg.paths).list()
+    if not tasks:
+        return
+    integrated = sum(1 for t in tasks if t.status == TaskStatus.INTEGRATED.value)
+    roles = sorted({t.role for t in tasks})
+    line = (f"- {datetime.now().strftime('%Y-%m-%d %H:%M')}  {len(tasks)} task(s) total, {integrated} integrated"
+            f"  | roles: {', '.join(roles)}")
+    path = ledger_path(cfg)
+    entries = [l for l in path.read_text(encoding="utf-8").splitlines() if l.startswith("- ")] if path.is_file() else []
+    entries = (entries + [line])[-200:]
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text("\n".join(LEDGER_HEADER + entries) + "\n", encoding="utf-8")
+
+
+def recent_ledger(cfg: ProjectConfig, n: int = 5) -> list[str]:
+    path = ledger_path(cfg)
+    if not path.is_file():
+        return []
+    return [l for l in path.read_text(encoding="utf-8").splitlines() if l.startswith("- ")][-n:]
+
+
 def session_summary(cfg: ProjectConfig) -> str:
     from . import discovery
     from .registry import build_registry
@@ -122,6 +153,9 @@ def session_summary(cfg: ProjectConfig) -> str:
              f"Enforcement: {mode(cfg)} (direct product-code edits are {'blocked' if mode(cfg) == 'block' else 'allowed'})."]
     if pending:
         lines.append("Unfinished tasks from earlier:\n  " + "\n  ".join(pending))
+    recent = recent_ledger(cfg)
+    if recent:
+        lines.append("Recent sessions (" + str(ledger_path(cfg).relative_to(cfg.paths.root)) + "):\n  " + "\n  ".join(recent))
     return "\n".join(lines)
 
 

@@ -255,8 +255,24 @@ End the final message with one fenced block (AgentMesh parses it; the manager st
 ```"""
 
 
-def render_role(role: str, p: ProjectProfile, reference_note: str | None = None) -> str:
-    s = spec_for(role, p)
+def custom_spec(role: str, data: dict[str, Any], p: ProjectProfile) -> RoleSpec:
+    """Build a RoleSpec from a user-written `custom_roles.<role>` entry (see `agentmesh role add`)."""
+    capability = data.get("capability", "write")
+    return RoleSpec(
+        role=role, title=data.get("title", role), capability=capability,
+        purpose=data.get("purpose", f"Custom role `{role}` (no purpose given)."),
+        when=data.get("when", ["As routed by the manager."]),
+        responsibilities=data.get("responsibilities", ["Carry out the task description exactly."]),
+        allowed=data.get("allowed", [", ".join(data.get("allowed_paths", [])) or "(no paths set)"]),
+        allowed_paths=data.get("allowed_paths", []),
+        must_not=data.get("must_not", []) + ["Secrets, `.env*`, signing keys, `.agentmesh/`.", "Other agents or CLIs: you do not delegate."],
+        outputs=data.get("outputs", ["Report with changed files, commands run, and results."]),
+        handoff_to=data.get("handoff_to", []), isolation=data.get("isolation", "worktree"),
+        verify=data.get("verify", []), rules=data.get("rules", []))
+
+
+def render_role(role: str, p: ProjectProfile, reference_note: str | None = None, spec: RoleSpec | None = None) -> str:
+    s = spec or spec_for(role, p)
     bullets = lambda xs: "\n".join(f"- {x}" for x in xs) if xs else "- (none)"
     reads = ["`.agentmesh/project.yaml` and `.agentmesh/workflow.yaml`", "The task description given to you (requirements, acceptance criteria)"]
     reads += [f"`{f}` (human instructions)" for f, ok in p.instruction_files.items() if ok and f in ("CLAUDE.md", "AGENTS.md")]
@@ -286,9 +302,9 @@ def render_role(role: str, p: ProjectProfile, reference_note: str | None = None)
     return "\n".join(out)
 
 
-def role_policy(role: str, p: ProjectProfile) -> dict[str, Any]:
+def role_policy(role: str, p: ProjectProfile, spec: RoleSpec | None = None) -> dict[str, Any]:
     """Machine-readable slice stored in project.yaml (enforced by `delegate`)."""
-    s = spec_for(role, p)
+    s = spec or spec_for(role, p)
     forbidden = list(GLOBAL_FORBIDDEN)
     if role == "project-analyst":
         forbidden = [f for f in forbidden if f != ".agentmesh/**"]

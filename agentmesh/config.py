@@ -64,6 +64,7 @@ DEFAULTS: dict[str, Any] = {
     "economy": {"mode": "auto"},                       # token saving: auto = init/doctor suggest tools | off (key is not "tokens": the secret redactor flags that)         # run-batch: tasks at once
     "references": [],
     "overrides": {"roles": {}},            # per-role patches applied over generated `roles`
+    "custom_roles": {},                    # user-defined roles (`agentmesh role add`); init generates their agent files too
 }
 
 
