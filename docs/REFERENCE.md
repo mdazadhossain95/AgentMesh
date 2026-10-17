@@ -49,6 +49,9 @@ powershell -c "irm https://raw.githubusercontent.com/mdazadhossain95/AgentMesh/m
 It installs `uv` if you don't have it (via Homebrew/winget when present, otherwise uv's official installer), then
 AgentMesh. Open a **new terminal** afterwards. Run the same line again to update.
 
+Running an older install prints a one-line update notice to stderr (checked against `main`'s `pyproject.toml`, cached
+24h, never blocks a command). Set `AGENTMESH_NO_UPDATE_CHECK=1` to turn it off.
+
 Piping a script into a shell runs whatever it contains, so you can read it first ([install.sh](../install.sh),
 [install.ps1](../install.ps1)) or skip it and use Way 2. By default it installs the latest `main`; to install a fixed
 version, set `AGENTMESH_REF` (a tag or commit), for example `AGENTMESH_REF=<tag-or-commit> sh install.sh` after downloading the script.
@@ -187,7 +190,7 @@ diff, runs `agentmesh verify`, sends focused corrections with `delegate --contin
 | `discover [--json]` | Probe this machine for coding CLIs (`--version`/`--help` only) and unknown candidates |
 | `agents [--refresh]` | Known workers, cached state, runtime status (cooldown/failures) |
 | `analyze [--json]` | Show what init would detect; writes nothing |
-| `init [--auto] [--yes] [--manager X] [--reference PATH\|URL] [--answer id=val] [--security\|--no-security] [--dry-run]` | Generate/refresh `.agentmesh/` and manager bootstrap |
+| `init [--auto] [--yes] [--manager X] [--reference PATH\|URL] [--answer id=val] [--security\|--no-security] [--skills\|--no-skills] [--dry-run]` | Generate/refresh `.agentmesh/` and manager bootstrap |
 | `doctor [--json]` | Config, roles, workflow, workers, routing depth, git, hygiene. No model calls |
 | `plan "<request>" [--json] [--risk low\|normal\|high]` | Map a request to workflow stages/roles (+ risk tier, worker preview) |
 | `delegate --role R ... [--risk T]` | Run one role as a task on a routed worker, in a git worktree, with fallback |
@@ -221,6 +224,7 @@ GoVio/
     ├── workflow.yaml         # conditional stages + signal vocabulary
     ├── agents/*.md           # one file per relevant role (not all roles, only relevant ones)
     ├── references/index.md   # only with --reference
+    ├── references/skills-index.md # only with --skills (or "yes" at the prompt): public skill catalogs, filtered to the detected stack
     ├── tasks/  reports/      # task + result JSON (+ history, verify results)
     └── runtime/ logs/ state/ # scratch, redacted worker logs, cooldowns (gitignored)
 ```
@@ -242,6 +246,13 @@ and **enforced** after every run from `git`.
 **Questions** are asked only when files can't settle them: an unrecognised `backend/` directory, a repo with no manifest,
 multiple backends, a lone security-ish module. Non-interactive (`--yes`, no TTY) uses defaults and records them under
 `project.assumptions`.
+
+**Skill catalogs (opt-in):** on an interactive first `init`, you're asked once whether to index three public skill
+catalogs (`anthropics/skills`, `tech-leads-club/agent-skills`, `alirezarezvani/claude-skills`), filtered to this
+project's detected stack (only matching `SKILL.md` files are listed — titles/headings only, no content loaded until
+an agent opens one). Answer persists in `project.yaml` under `skill_catalogs`; re-running `init` never re-asks or
+re-fetches. `--skills` / `--no-skills` skip the prompt (for scripted or `--yes` installs, which default to skip and
+log an assumption instead of silently cloning).
 
 **Idempotency:** re-running `init` never duplicates the CLAUDE.md block, never overwrites a role/workflow file you edited
 (generated files carry a content hash; edited ones are `kept`), preserves all human-owned `project.yaml` sections

@@ -63,6 +63,7 @@ DEFAULTS: dict[str, Any] = {
                "require_different_worker": True},      # reviewer must not be the worker that wrote the code
     "economy": {"mode": "auto"},                       # token saving: auto = init/doctor suggest tools | off (key is not "tokens": the secret redactor flags that)         # run-batch: tasks at once
     "references": [],
+    "skill_catalogs": [],                  # public skill catalogs indexed at init time (opt-in), filtered to the detected stack
     "overrides": {"roles": {}},            # per-role patches applied over generated `roles`
     "custom_roles": {},                    # user-defined roles (`agentmesh role add`); init generates their agent files too
 }

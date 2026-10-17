@@ -12,7 +12,7 @@ import tempfile
 from pathlib import Path
 from typing import Any
 
-from . import __version__, discovery, enforcement, gitutil
+from . import __version__, discovery, enforcement, gitutil, update_check
 from .adapters.base import RunContext
 from .config import (ProjectConfig, ProjectPaths, deep_merge, dump_yaml, find_project_root, global_home, load_yaml,
                      parse_scalar, set_dotted, MACHINE_KEYS)
@@ -199,9 +199,18 @@ def cmd_init(args: argparse.Namespace) -> int:
     interactive = sys.stdin.isatty() and not args.yes
     answers = dict(kv.split("=", 1) for kv in args.answer or [])
     security = True if args.security else False if args.no_security else None
+    skills = True if args.skills else False if args.no_skills else None
+    if skills is None and interactive:
+        project_yaml = root / ".agentmesh" / "project.yaml"
+        already_set = project_yaml.is_file() and bool(load_yaml(project_yaml).get("skill_catalogs"))
+        if not already_set:
+            skills = tty_asker(
+                "Index public skill catalogs (anthropics/skills, tech-leads-club/agent-skills, "
+                "alirezarezvani/claude-skills), filtered to this project's detected stack?",
+                ["yes", "no"], "no") == "yes"
     rep = init_project(root, registry, asker=tty_asker if interactive else None, answers=answers,
                        manager=args.manager, reference=args.reference, dry_run=args.dry_run, security=security,
-                       report_line=out)
+                       skills=skills, report_line=out)
     p = rep.profile
     out(f"AgentMesh init{' (dry run)' if args.dry_run else ''}: {p.name}")
     out(f"  kind:     {p.kind}   components: {', '.join(f'{c.path}[{c.stack}]' for c in p.components) or 'none detected'}")
@@ -834,6 +843,8 @@ def build_parser() -> argparse.ArgumentParser:
     sp.add_argument("--answer", action="append", metavar="ID=VALUE", help="pre-answer a question (repeatable)")
     sp.add_argument("--security", action="store_true", help="force security-reviewer role")
     sp.add_argument("--no-security", action="store_true", help="drop security-related review roles")
+    sp.add_argument("--skills", action="store_true", help="index default public skill catalogs, filtered to the detected stack (skip the prompt)")
+    sp.add_argument("--no-skills", action="store_true", help="never index skill catalogs (skip the prompt)")
     sp.add_argument("--dry-run", action="store_true")
     sp = add("discover", cmd_discover, "inspect this machine for coding CLIs (free: --version/--help only)")
     sp.add_argument("--json", action="store_true")
@@ -933,9 +944,23 @@ def main(argv: list[str] | None = None) -> int:
     if args.command == "launch" and args.extra and args.extra[0] == "--":
         args.extra = args.extra[1:]
     try:
-        return args.fn(args)
+        code = args.fn(args)
     except AgentMeshError as e:
         err(f"agentmesh: error{'' if e.code is ErrorCode.UNKNOWN_ERROR else ' [' + e.code.value + ']'}: {e}")
-        return 1
+        code = 1
     except KeyboardInterrupt:
         return 130
+    _notify_update(args)
+    return code
+
+
+def _notify_update(args: argparse.Namespace) -> None:
+    if os.environ.get("AGENTMESH_NO_UPDATE_CHECK") or getattr(args, "json", False) or args.command in ("hook", "version"):
+        return
+    try:
+        latest = update_check.check()
+    except Exception:
+        return
+    if latest:
+        err(f"\nagentmesh {latest} is available (you have {__version__}).")
+        err("Update: curl -LsSf https://raw.githubusercontent.com/mdazadhossain95/AgentMesh/main/install.sh | sh")

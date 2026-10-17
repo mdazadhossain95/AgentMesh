@@ -160,6 +160,28 @@ def test_reference_is_indexed_not_copied(flutter_only, tmp_path):
     assert ProjectConfig.load(flutter_only).get("references") == [str(ref)]
 
 
+def test_skill_catalogs_opt_in_and_filtered_to_stack(flutter_only, tmp_path, monkeypatch):
+    catalog = tmp_path / "catalog"
+    write(catalog, "skills/flutter-clean-arch/SKILL.md", "# Flutter Clean Arch\n## layering")
+    write(catalog, "skills/rust-embedded/SKILL.md", "# Embedded firmware\n## wiring")
+    import agentmesh.initializer as initializer
+    monkeypatch.setattr(initializer, "DEFAULT_SKILL_CATALOGS", [str(catalog)])
+
+    rep = init_with(flutter_only, REG())
+    assert ".agentmesh/references/skills-index.md" not in rep.actions
+    assert any("skill_catalogs=skip" in a for a in rep.assumptions)
+
+    rep = init_with(flutter_only, REG(), skills=True)
+    idx = (flutter_only / ".agentmesh/references/skills-index.md").read_text()
+    assert "flutter-clean-arch" in idx and "rust-embedded" not in idx
+    assert "skills-index.md" in (flutter_only / ".agentmesh/agents/app-engineer.md").read_text()
+    assert ProjectConfig.load(flutter_only).get("skill_catalogs") == [str(catalog)]
+
+    # already recorded: re-running without --skills does not re-add or drop it
+    rep = init_with(flutter_only, REG())
+    assert ProjectConfig.load(flutter_only).get("skill_catalogs") == [str(catalog)]
+
+
 def test_manager_choice_is_recorded_and_gets_instructions(flutter_only):
     init_with(flutter_only, REG(), manager="codex")
     assert bootstrap.BEGIN in (flutter_only / "AGENTS.md").read_text()
