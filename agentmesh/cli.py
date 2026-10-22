@@ -597,8 +597,8 @@ def cmd_integrate(args: argparse.Namespace) -> int:
             other.status = TaskStatus.INTEGRATED.value
             tm.save(other)
             out(f"{other.task_id} was part of {task.task_id}: marked INTEGRATED")
-    if args.cleanup:
-        wt.remove(task.task_id, delete_branch=True)
+    if args.cleanup or cfg.get("worktree.cleanup_on_integrate", True):
+        wt.remove(task.task_id, delete_branch=True)       # merged: the copy and branch are no longer needed
     out(f"{task.task_id} merged into {gitutil.current_branch(cfg.paths.root)} at {sha[:10]}")
     return 0
 

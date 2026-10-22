@@ -88,3 +88,16 @@ def test_remove(repo):
     path, branch, _ = wt.create("t1")
     wt.remove("t1", delete_branch=True)
     assert not path.exists() and branch not in git(repo, "branch")
+
+
+def test_dependency_dirs_are_linked_and_not_committed(repo):
+    write(repo, "node_modules/pkg/index.js", "x")
+    wt = Worktrees(repo, link=("node_modules", "../escape", "missing"))
+    path, _, base = wt.create("t1")
+    assert (path / "node_modules").is_symlink() and (path / "node_modules/pkg/index.js").exists()
+    assert not (path / "missing").exists() and not (path.parent / "escape").exists()
+    write(path, "new.txt", "x")
+    wt.checkpoint("t1", "w")
+    assert wt.changed_files("t1", base) == ["new.txt"]       # symlink excluded from `git add -A`
+    wt.remove("t1")
+    assert (repo / "node_modules/pkg/index.js").exists()      # removal never follows the link

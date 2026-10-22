@@ -10,8 +10,10 @@ from .errors import AgentMeshError, ErrorCode, ProjectError
 
 
 class Worktrees:
-    def __init__(self, root: Path, dirname: str = ".agentmesh-worktrees"):
+    def __init__(self, root: Path, dirname: str = ".agentmesh-worktrees", link: tuple[str, ...] = ()):
         self.root = root
+        # plain top-level names only: anything with a separator or ".." could point outside the project
+        self.link = tuple(n for n in link if n and n not in (".", "..") and "/" not in n and "\\" not in n)
         self.base_dir = root / dirname
         self.dirname = dirname
         self.lock = root / ".agentmesh" / "state" / "git.lock"      # one writer at a time on the shared .git
@@ -37,6 +39,7 @@ class Worktrees:
         base = gitutil.git(self.root, "rev-parse", base_ref).stdout.strip()
         self.base_dir.mkdir(parents=True, exist_ok=True)
         gitutil.git(self.root, "worktree", "add", "-b", branch, str(path), base)
+        self._link_deps(path)
         for other in merge:
             r = gitutil.git(path, *gitutil.IDENTITY, "merge", "--no-ff", "-m", f"agentmesh: combine {other} into {task_id}",
                             other, check=False)
@@ -46,6 +49,26 @@ class Worktrees:
                 raise AgentMeshError(f"cannot combine {other} with the other base tasks (merge conflict): "
                                      "those tasks overlap, run them one after another via --base-task", ErrorCode.GIT_CONFLICT)
         return path, branch, gitutil.head(path)
+
+    def _link_deps(self, path: Path) -> None:
+        """Symlink untracked dependency dirs (node_modules, .venv) so workers skip reinstalling them."""
+        names = [n for n in self.link if (self.root / n).exists() and not (path / n).exists()]
+        if not names:
+            return
+        exclude = Path(gitutil.git(self.root, "rev-parse", "--git-path", "info/exclude").stdout.strip())
+        if not exclude.is_absolute():
+            exclude = self.root / exclude
+        exclude.parent.mkdir(parents=True, exist_ok=True)
+        have = exclude.read_text().splitlines() if exclude.exists() else []
+        add = [f"/{n}" for n in names if f"/{n}" not in have]      # keep the symlink out of auto-commit's `git add -A`
+        if add:
+            with exclude.open("a") as f:
+                f.write("\n".join(add) + "\n")
+        for n in names:
+            try:
+                (path / n).symlink_to(self.root / n, target_is_directory=(self.root / n).is_dir())
+            except OSError:
+                pass                                                   # e.g. Windows without symlink rights: worker reinstalls
 
     def exists(self, task_id: str) -> bool:
         return self.path_for(task_id).is_dir()

@@ -98,6 +98,7 @@ def test_delegate_fallback_verify_integrate_end_to_end(project, capsys):
     assert code == 0 and res["status"] == "SUCCESS" and res["worker"] == "m2"
     assert [a["worker"] for a in res["attempts"]] == ["m1", "m2"] and res["attempts"][0]["normalized_error"] == "QUOTA_EXCEEDED"
     assert res["changed_files"] == ["lib/features/profile.dart"] and "m1 -> QUOTA_EXCEEDED" in err
+    assert {"workspace", "worker", "total"} <= set(res["timings"]) and "time: workspace" in err
 
     code, out, _ = run(capsys, "diff", "task-001", "--stat")
     assert "profile.dart" in out
@@ -105,7 +106,7 @@ def test_delegate_fallback_verify_integrate_end_to_end(project, capsys):
     assert code == 1 and "not verified" in err                      # cannot merge unverified work
     code, out, _ = run(capsys, "verify", "task-001", "--cmd", "git rev-parse --is-inside-work-tree")
     assert code == 0 and "VERIFIED" in out
-    code, out, _ = run(capsys, "integrate", "task-001", "--cleanup")
+    code, out, _ = run(capsys, "integrate", "task-001")           # worktree is removed by default once merged
     assert code == 0 and (project / "lib/features/profile.dart").exists()
     assert not (project / ".agentmesh-worktrees/task-001").exists()
     status = json.loads(run(capsys, "status", "--json")[1])

@@ -143,6 +143,7 @@ class WorkerResult(_Serializable):
     stderr: str = ""
     started_at: str = ""
     finished_at: str = ""
+    timings: dict[str, float] = field(default_factory=dict)   # seconds: workspace, worker, total
 
     @classmethod
     def from_dict(cls, data: dict[str, Any]) -> "WorkerResult":

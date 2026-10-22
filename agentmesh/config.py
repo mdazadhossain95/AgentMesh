@@ -49,7 +49,8 @@ DEFAULTS: dict[str, Any] = {
         "role_autonomy": {},               # role -> edit | full
         "models": {},                      # worker -> model name
     },
-    "worktree": {"enabled": True, "dir": ".agentmesh-worktrees", "auto_commit": True},
+    "worktree": {"enabled": True, "dir": ".agentmesh-worktrees", "auto_commit": True, "cleanup_on_integrate": True,
+                 "link": ["node_modules", ".venv", "venv"]},          # untracked dep dirs symlinked into each worktree
     "enforcement": {                       # makes the manager follow the loop (Claude Code hooks; `audit` for any CLI)
         "mode": "block",                   # block | warn | off
         "allow_paths": [".agentmesh/**", ".claude/**", ".gitignore", "CLAUDE.md", "AGENTS.md", "**/*.md", "docs/**"],

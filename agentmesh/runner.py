@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import os
+import time
 from pathlib import Path
 from typing import Callable
 
@@ -47,8 +48,10 @@ class Runner:
         self.root = config.paths.root
         self.tasks = tasks or TaskManager(config.paths)
         self.router = Router(registry, infos, config, state)
-        self.worktrees = Worktrees(self.root, config.get("worktree.dir", ".agentmesh-worktrees"))
+        self.worktrees = Worktrees(self.root, config.get("worktree.dir", ".agentmesh-worktrees"),
+                                   tuple(config.get("worktree.link", ()) or ()))
         self.emit = on_event or (lambda _m: None)
+        self._t0s: dict[str, float] = {}          # task_id -> run start, for timings (runs may be parallel)
 
     # ---- workspace ----
     def _prepare_workspace(self, task: Task) -> tuple[Path, str | None, bool]:
@@ -110,10 +113,15 @@ class Runner:
         task.delegation_depth = current_depth() + 1
         result = WorkerResult(task_id=task.task_id, role=task.role, worker=None, status="FAILED",
                               started_at=utcnow())
+        t0 = time.monotonic()
         try:
             cwd, owner, owns_base = self._prepare_workspace(task)
         except AgentMeshError as e:
             return self._finish(task, result, error=e.code, summary=str(e))
+        result.timings["workspace"] = round(time.monotonic() - t0, 2)
+        self._t0s[task.task_id] = t0
+        if task.worktree:
+            self.emit(f"[{task.task_id}] workspace ready in {result.timings['workspace']}s")
         result.worktree, result.branch = task.worktree, task.branch
         task.status = TaskStatus.RUNNING.value
         task.verified = False            # any new run (continue/correction) voids an earlier verification
@@ -313,6 +321,12 @@ class Runner:
             if summary:
                 result.summary = summary
         result.finished_at = utcnow()
+        if result.attempts:
+            result.timings["worker"] = round(sum(a.duration_seconds for a in result.attempts), 2)
+        t0 = self._t0s.pop(task.task_id, None)
+        if t0 is not None:
+            result.timings["total"] = round(time.monotonic() - t0, 2)
+            self.emit(f"[{task.task_id}] time: " + ", ".join(f"{k} {v}s" for k, v in result.timings.items()))
         task.status = {"SUCCESS": TaskStatus.SUCCESS, "SCOPE_VIOLATION": TaskStatus.SCOPE_VIOLATION}.get(
             result.status, TaskStatus.FAILED).value
         self.tasks.save(task)
