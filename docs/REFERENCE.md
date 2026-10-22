@@ -379,6 +379,20 @@ If the area can't be inferred and several engineers exist, `plan` says `needs_cl
   may refuse to run shell commands headlessly; workers are told to report `blocked` rather than guess, and the manager
   runs `agentmesh verify` itself.
 
+### Speeding up worktrees: `worktree.link` (off by default)
+
+Each task runs in a fresh worktree that has no `node_modules` / `.venv`, so workers may reinstall them. To skip that,
+list the folders in `.agentmesh/project.yaml`:
+
+```yaml
+worktree:
+  link: [node_modules, .venv]
+```
+
+**Security tradeoff:** a link points at your real folder. A worker can change it, and the scope check cannot see it
+(git ignores it), so it escapes worktree isolation. Enable it only for workers you trust, not for `autonomy: full`
+on untrusted tasks. Names must be plain top-level folders (no `/` or `..`).
+
 ## Adapter development
 
 Agent-specific logic lives only in `agentmesh/adapters/`. To add a CLI:

@@ -101,3 +101,8 @@ def test_dependency_dirs_are_linked_and_not_committed(repo):
     assert wt.changed_files("t1", base) == ["new.txt"]       # symlink excluded from `git add -A`
     wt.remove("t1")
     assert (repo / "node_modules/pkg/index.js").exists()      # removal never follows the link
+
+
+def test_dependency_links_are_off_by_default(repo):
+    from agentmesh.config import DEFAULTS
+    assert DEFAULTS["worktree"]["link"] == []
